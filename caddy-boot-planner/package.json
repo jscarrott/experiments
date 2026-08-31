@@ -1,0 +1,28 @@
+{
+  "name": "caddy-boot-planner",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "3D packing and load-restraint planner for a VW Caddy Maxi Life boot",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:artifact": "tsc --noEmit && vite build --mode artifact",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^26.4.0",
+    "@types/three": "^0.180.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vite-plugin-singlefile": "^2.1.0"
+  }
+}
