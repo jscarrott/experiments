@@ -107,15 +107,18 @@ the first thing to run once accounts exist.
 
 Bulletin asks for `include:my.bulletin.permissions` — a `"type": "permission-set"`
 lexicon it publishes, which gives a friendlier consent screen. That only works once the
-lexicon is resolvable, which means owning the domain the NSID is built from and
-publishing the schemas as records. With a placeholder namespace it is not an option.
+lexicon is resolvable: a `_lexicon.<authority>` TXT record holding `did=…`, and the
+schemas published as `com.atproto.lexicon.schema` records keyed by NSID.
 
-The raw scope syntax works instead, and needs nothing published:
+The authority is the NSID minus its final segment, reversed — so
+`com.jscarrott.hyperlocal.note` resolves via **`_lexicon.hyperlocal.jscarrott.com`**, not
+via the bare apex. That is a DNS record and a set of published records, neither of which
+exists yet, so the raw scope syntax is used instead. It needs nothing published:
 
 ```
 atproto
-space?type=xyz.hyperlocal.space&authority=*&skey=self
-     &collection=xyz.hyperlocal.note
+space?type=com.jscarrott.hyperlocal.space&authority=*&skey=self
+     &collection=com.jscarrott.hyperlocal.note
      &action=read&action=create&action=update&action=delete&manage=create
 ```
 
@@ -132,4 +135,5 @@ itself.
 
 Switching to a permission set later is a scope-string change plus publishing the
 lexicons, and the permission set is already written for that:
-`lexicons/xyz/hyperlocal/permissions.json`.
+`lexicons/com/jscarrott/hyperlocal/permissions.json`. The namespace is now built from a
+domain that is actually owned, so this is available whenever it is worth doing.

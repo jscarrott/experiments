@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "xyz.hyperlocal.note",
+  "id": "com.jscarrott.hyperlocal.note",
   "defs": {
     "main": {
       "type": "record",

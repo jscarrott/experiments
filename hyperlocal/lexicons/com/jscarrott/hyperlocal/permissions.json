@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "xyz.hyperlocal.permissions",
+  "id": "com.jscarrott.hyperlocal.permissions",
   "defs": {
     "main": {
       "type": "permission-set",
@@ -10,10 +10,10 @@
         {
           "type": "permission",
           "resource": "space",
-          "spaceType": "xyz.hyperlocal.space",
+          "spaceType": "com.jscarrott.hyperlocal.space",
           "authority": "*",
           "skey": "self",
-          "collection": ["xyz.hyperlocal.note"],
+          "collection": ["com.jscarrott.hyperlocal.note"],
           "action": ["read", "create", "update", "delete"],
           "manage": ["create", "update", "delete"]
         }

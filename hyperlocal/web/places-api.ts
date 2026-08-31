@@ -1,7 +1,7 @@
+import { resolveBase } from '../shared/places-config.js';
 import type { PlaceCandidate } from '../shared/types.js';
 
-/** Where the OSM proxy lives. Same origin in production, a separate port in dev. */
-const BASE = import.meta.env.VITE_PLACES_URL ?? 'http://127.0.0.1:8787';
+const BASE: string | null = resolveBase(import.meta.env.VITE_PLACES_URL, import.meta.env.DEV);
 
 interface PlaceResponse {
   candidates?: PlaceCandidate[];
@@ -19,6 +19,7 @@ export interface PlaceLookup {
 const EMPTY: PlaceLookup = { candidates: [], degraded: true };
 
 async function get(path: string, params: Record<string, string>): Promise<PlaceLookup> {
+  if (BASE === null) return EMPTY;
   const url = new URL(path, BASE);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   try {

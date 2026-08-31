@@ -1,13 +1,13 @@
 {
   "lexicon": 1,
-  "id": "xyz.hyperlocal.space",
+  "id": "com.jscarrott.hyperlocal.space",
   "defs": {
     "main": {
       "type": "space",
       "key": "literal:self",
       "name": "Hyperlocal",
       "description": "A private map of place notes and reviews, shared with invited friends and family.",
-      "collections": ["xyz.hyperlocal.note"]
+      "collections": ["com.jscarrott.hyperlocal.note"]
     }
   }
 }

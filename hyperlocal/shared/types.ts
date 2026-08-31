@@ -1,3 +1,5 @@
+import type { NOTE_COLLECTION } from './nsid.js';
+
 /** The `community.lexicon.location.geo` shape. Note the coordinates are STRINGS. */
 export interface GeoLocation {
   $type?: 'community.lexicon.location.geo';
@@ -7,7 +9,7 @@ export interface GeoLocation {
   name?: string;
 }
 
-/** The `xyz.hyperlocal.note#osmPlace` shape. */
+/** The `#osmPlace` def from the note lexicon. */
 export interface OsmPlace {
   osmType: 'node' | 'way' | 'relation';
   /** String, not number: OSM ids are past 2^32 and heading for 2^53. */
@@ -17,9 +19,9 @@ export interface OsmPlace {
   category?: string;
 }
 
-/** An `xyz.hyperlocal.note` record, as it sits in a repo. */
+/** A note record, as it sits in a repo. */
 export interface NoteRecord {
-  $type?: 'xyz.hyperlocal.note';
+  $type?: typeof NOTE_COLLECTION;
   text: string;
   location: GeoLocation;
   place?: OsmPlace;

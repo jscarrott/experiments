@@ -100,7 +100,7 @@ world, even in a fixture.
 ### Signing in, and inviting people
 
 Sign in with a handle on a spaces-capable PDS. On first run the app creates your space
-(`xyz.hyperlocal.space`, one per person, key `self`). The **Who can see this** panel
+(`com.jscarrott.hyperlocal.space`, one per person, key `self`). The **Who can see this** panel
 then invites people by handle, and **Copy invite link** gives you a URL carrying
 `?owner=<your DID>` — a guest needs that, because a space is anchored on its owner's
 DID and without it they would open their own empty space instead.
@@ -111,14 +111,48 @@ space credential, so a member hosted elsewhere cannot enumerate the list at all.
 
 ### Deploying
 
+The app deploys to **https://hyperlocal.jscarrott.com** on GitHub Pages, from
+`.github/workflows/hyperlocal-pages.yml`. It runs on pushes to `main` that touch
+`hyperlocal/`, and can be dispatched manually against any branch. Two things are set up
+once, by hand:
+
+- a `hyperlocal` CNAME → `jscarrott.github.io.` at the DNS host;
+- **Settings → Pages → Source: GitHub Actions**.
+
+`public/CNAME` is committed so the custom domain survives every deploy rather than
+depending on the repo setting being remembered. The apex `jscarrott.com` is a Pages site
+from a different repository — a repo gets one Pages site and different repos can serve
+different subdomains, so the two do not collide.
+
+The production OAuth `client_id` **is** the URL
+`https://hyperlocal.jscarrott.com/client-metadata.json`, so a 404 there breaks sign-in
+entirely. The workflow generates that document at build time, and the scope inside it
+must match what the app requests exactly — both come from one constant in
+`shared/scope.ts`, so they cannot drift.
+
+**The OSM proxy is opt-in.** `VITE_PLACES_URL` is a build-time constant; with it unset
+the app never calls the proxy and every note gets a plain pin. That is deliberate — the
+old default of `http://127.0.0.1:8787` is mixed content from an HTTPS page and would be
+blocked by the browser, so an unconfigured build would burn a guaranteed-failed request
+on every compose. Set the repository variable `HYPERLOCAL_PLACES_URL` to an HTTPS proxy
+once one is hosted:
+
 ```bash
-PUBLIC_URL=https://your.site npm run build:deploy   # writes client-metadata.json, builds dist/
 fly deploy --config place-proxy/fly.toml --dockerfile place-proxy/Dockerfile
 ```
 
-The production OAuth `client_id` must be a public HTTPS URL serving the metadata
-document, and the scope inside it must match what the app requests exactly. Both come
-from one constant in `shared/scope.ts` so they cannot drift.
+### About the namespace
+
+Records are keyed by their collection name and spaces by their space type, so renaming
+the namespace after anyone has written a note orphans every existing record under a
+collection the app no longer reads. It was moved from the placeholder `xyz.hyperlocal` to
+`com.jscarrott.hyperlocal` before any real note existed, for exactly that reason.
+
+That also puts lexicon resolution within reach: the authority is the NSID minus its final
+segment, reversed, so `com.jscarrott.hyperlocal.note` resolves via
+`_lexicon.hyperlocal.jscarrott.com` — a TXT record holding `did=…`, plus the schemas
+published as `com.atproto.lexicon.schema` records. Doing that would let the OAuth consent
+screen show the permission set's title instead of a raw scope string.
 
 ## Layout
 
@@ -128,6 +162,11 @@ shared/       pure logic: validation, geometry, filtering, grouping, the scope
 web/          the app: OAuth, space sync, MapLibre, compose
 place-proxy/  Overpass + Photon, rate-limited and cached. No npm dependencies.
 ```
+
+The NSID is written in exactly one place, `shared/nsid.ts`. Everything else derives from
+it — the collection name, the space type, the OAuth scope, the record `$type` (a
+`typeof NOTE_COLLECTION` literal), the fixtures, even the lexicon directory the drift test
+reads. Renaming the namespace really is that one line plus a `git mv`.
 
 `shared/` imports nothing — not the DOM, not maplibre, not an alpha package — so the
 logic that decides what you see is unit-tested with no browser and no network.

@@ -1,3 +1,4 @@
+import { NOTE_COLLECTION } from '../shared/nsid.js';
 import { toNote } from '../shared/note.js';
 import type { Note, OsmPlace } from '../shared/types.js';
 
@@ -15,7 +16,7 @@ export function makeNote(input: {
 }): Note {
   const n = ++seq;
   const record: Record<string, unknown> = {
-    $type: 'xyz.hyperlocal.note',
+    $type: NOTE_COLLECTION,
     text: input.text ?? `note ${n}`,
     location: {
       $type: 'community.lexicon.location.geo',
@@ -29,7 +30,7 @@ export function makeNote(input: {
   if (input.place) record.place = input.place;
 
   const note = toNote(
-    `at://${input.author ?? 'did:plc:alice'}/xyz.hyperlocal.note/${n}`,
+    `at://${input.author ?? 'did:plc:alice'}/${NOTE_COLLECTION}/${n}`,
     `bafy${n}`,
     input.author ?? 'did:plc:alice',
     record,
