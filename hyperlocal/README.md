@@ -111,6 +111,9 @@ space credential, so a member hosted elsewhere cannot enumerate the list at all.
 
 ### Deploying
 
+**`docs/deployment.md` is the runbook** — what to host where, in what order, and what to
+check at each stage. The short version:
+
 The app deploys to **https://hyperlocal.jscarrott.com** on GitHub Pages, from
 `.github/workflows/hyperlocal-pages.yml`. It runs on pushes to `main` that touch
 `hyperlocal/`, and can be dispatched manually against any branch. Two things are set up
