@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hyperlocal — private place notes</title>
+    <link rel="stylesheet" href="/web/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="toolbar">
+        <div class="toolbar__brand">
+          <span class="toolbar__title">Hyperlocal</span>
+          <span class="toolbar__sub">Place notes, shared only with your people</span>
+        </div>
+        <button type="button" class="button" id="add-note" data-testid="add-note">Add a note here</button>
+        <div class="account" id="account"></div>
+      </header>
+
+      <p class="error" id="error" hidden></p>
+
+      <main class="workspace">
+        <aside class="sidebar sidebar--left" id="filters"></aside>
+        <div class="viewport">
+          <div id="map"></div>
+          <p class="help">Tap a business to write about it, or anywhere else to drop a pin.</p>
+        </div>
+        <aside class="sidebar sidebar--right">
+          <div id="compose" hidden></div>
+          <div id="list"></div>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="/web/main.ts"></script>
+  </body>
+</html>

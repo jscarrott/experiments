@@ -1,0 +1,23 @@
+{
+  "lexicon": 1,
+  "id": "xyz.hyperlocal.permissions",
+  "defs": {
+    "main": {
+      "type": "permission-set",
+      "title": "Hyperlocal",
+      "detail": "Read and write place notes in a Hyperlocal space",
+      "permissions": [
+        {
+          "type": "permission",
+          "resource": "space",
+          "spaceType": "xyz.hyperlocal.space",
+          "authority": "*",
+          "skey": "self",
+          "collection": ["xyz.hyperlocal.note"],
+          "action": ["read", "create", "update", "delete"],
+          "manage": ["create", "update", "delete"]
+        }
+      ]
+    }
+  }
+}
