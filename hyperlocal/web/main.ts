@@ -5,6 +5,7 @@ import { initAuth, signIn } from './auth.js';
 import { DemoSource, DEMO_HANDLES } from './demo.js';
 import { fill, h, mustFind } from './dom.js';
 import { NoteMap } from './map.js';
+import { mountMembers } from './members.js';
 import { nearbyPlaces } from './places-api.js';
 import type { NoteSource } from './source.js';
 import {
@@ -31,6 +32,7 @@ const store = new Store();
 let source: NoteSource = new DemoSource();
 let draft: ComposeDraft | null = null;
 let noteMap: NoteMap;
+let inviteLink: string | null = null;
 
 /** DID → handle, filled in as we learn them. A DID in a sidebar is unreadable. */
 const handles = new Map<string, string>(Object.entries(DEMO_HANDLES));
@@ -301,15 +303,31 @@ async function start(): Promise<void> {
   };
 
   if (auth?.session) {
+    const session = auth.session as unknown as UserSession;
     try {
-      source = await connectSpace(auth.session as unknown as UserSession);
+      const context = await connectSpace(session);
+      source = context.source;
+      // The invite link has to name the owner explicitly: a space is anchored on its
+      // owner's DID, so without this a guest would open their own empty space instead.
+      inviteLink = `${window.location.origin}/?owner=${encodeURIComponent(context.ownerDid)}`;
+      mountMembers(mustFind('#members'), {
+        session,
+        authorityPds: context.ownerPds,
+        space: context.space,
+        isOwner: context.ownerDid === session.did,
+        onChange(dids) {
+          // Members who have never written do not appear in the notes, so the member
+          // list is the only place their DID is known at all.
+          for (const did of dids) if (!handles.has(did)) handles.set(did, shortDid(did));
+        },
+      });
     } catch (error) {
       store.update({ error: `Could not open the space: ${(error as Error).message}` });
       source = new DemoSource();
     }
   }
 
-  renderAccount(source.label, source.live, onSignIn, source.live ? window.location.href : null);
+  renderAccount(source.label, source.live, onSignIn, inviteLink);
 
   try {
     const notes = await source.load();
@@ -326,7 +344,14 @@ async function start(): Promise<void> {
  * space is anchored on its owner's DID and a member is reading someone else's. With no
  * owner given, it is your own.
  */
-async function connectSpace(session: UserSession): Promise<NoteSource> {
+interface SpaceContext {
+  source: NoteSource;
+  space: string;
+  ownerDid: string;
+  ownerPds: string;
+}
+
+async function connectSpace(session: UserSession): Promise<SpaceContext> {
   const params = new URLSearchParams(window.location.search);
   const ownerParam = params.get('owner');
   const userPds = await resolvePds(session.did);
@@ -342,8 +367,8 @@ async function connectSpace(session: UserSession): Promise<NoteSource> {
   const space = spaceRef(ownerDid);
   const ownerPds = ownerDid === session.did ? userPds : await resolvePds(ownerDid);
 
-  const connect = async () =>
-    new SpaceSource(
+  const connect = async (): Promise<SpaceContext> => ({
+    source: new SpaceSource(
       session.did,
       session.did,
       session,
@@ -351,7 +376,11 @@ async function connectSpace(session: UserSession): Promise<NoteSource> {
       ownerPds,
       space,
       userPds,
-    );
+    ),
+    space,
+    ownerDid,
+    ownerPds,
+  });
 
   try {
     return await connect();

@@ -100,9 +100,10 @@ world, even in a fixture.
 ### Signing in, and inviting people
 
 Sign in with a handle on a spaces-capable PDS. On first run the app creates your space
-(`xyz.hyperlocal.space`, one per person, key `self`). Share the link with `?owner=<your
-handle>` and add people by handle — you are the space authority, so only you can manage
-the member list.
+(`xyz.hyperlocal.space`, one per person, key `self`). The **Who can see this** panel
+then invites people by handle, and **Copy invite link** gives you a URL carrying
+`?owner=<your DID>` — a guest needs that, because a space is anchored on its owner's
+DID and without it they would open their own empty space instead.
 
 That last point is a real constraint, not a design choice:
 `simplespace.listMembers` requires OAuth on the authority's PDS and explicitly refuses a
@@ -164,7 +165,9 @@ Run it before trusting any of this with something you would not say out loud.
 
 No encryption, so no protection from a member or from the host. No moderation beyond
 choosing who you invite. No revocation of what a former member already synced. No
-antimeridian-crossing bounding boxes. Businesses are only tappable from z14 up, where
+antimeridian-crossing bounding boxes. No offline cache — the space is re-read on each
+load rather than persisted to IndexedDB, which is fine for hundreds of notes and would
+not be for hundreds of thousands. Businesses are only tappable from z14 up, where
 the tiles carry POIs. An OSM id can go stale — a shop remapped from a node to a building
 way changes identity, so older notes stop grouping with newer ones, though they keep
 their own coordinate and never vanish from the map.
