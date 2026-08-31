@@ -96,3 +96,41 @@ test('restingHeight puts a dragged box on top of what is already there', () => {
   const clear = place('c', 'crate', 0, 900, 0);
   assert.equal(restingHeight(clear, [existing], lookup), 0);
 });
+
+/** The shipped rails: 60 mm wide, centred at x = +/-330, so their inner faces are at 300. */
+const RAILS = [
+  { minX: -360, maxX: -300, minY: 500, maxY: 930, minZ: 0, maxZ: 25 },
+  { minX: 300, maxX: 360, minY: 500, maxY: 930, minZ: 0, maxZ: 25 },
+];
+
+test('a 600 mm Euro crate drops between the rails rather than onto them', () => {
+  // Worth knowing about this van: a 600-wide crate spans -300 to 300, which is
+  // exactly the gap between the rails' inner faces. It sits on the floor.
+  const crate = place('a', 'crate', 0, 700, 0);
+  assert.equal(restingHeight(crate, [], lookup, RAILS), 0);
+});
+
+test('restingHeight puts a wider crate on top of the rails rather than through them', () => {
+  const wide = spec('wide-crate', 800, 400, 300, { stackMode: 'friction', stackGroup: 'alc' });
+  const wideLookup = makeLookup([wide]);
+
+  // 800 wide spans -400 to 400, so it bears on both rails.
+  const overRails = place('a', 'wide-crate', 0, 700, 0);
+  assert.equal(restingHeight(overRails, [], wideLookup, RAILS), 25);
+
+  // Forward of the rails: back on the floor.
+  const clear = place('b', 'wide-crate', 0, 200, 0);
+  assert.equal(restingHeight(clear, [], wideLookup, RAILS), 0);
+});
+
+test('a box already on another box wins over the rail beneath', () => {
+  const onFloor = place('c', 'crate', 0, 700, 0);
+  const onTop = place('d', 'crate', 0, 700, 0);
+  assert.equal(restingHeight(onTop, [onFloor], lookup, RAILS), 300);
+});
+
+test('restingHeight without obstructions behaves exactly as before', () => {
+  const existing = place('a', 'crate', 0, 400, 0);
+  const dragged = place('b', 'crate', 0, 400, 0);
+  assert.equal(restingHeight(dragged, [existing], lookup), 300);
+});

@@ -19,6 +19,11 @@ export type Provenance =
   | 'derived'
   /** An educated guess. Wants a tape measure. */
   | 'estimated'
+  /**
+   * Measured for this exact model by someone else — a road test, an owners' club,
+   * kofferraum.org. Trustworthy, but it is their van and not yours.
+   */
+  | 'reference'
   /** The user measured their own vehicle or box. Trust it most. */
   | 'measured';
 

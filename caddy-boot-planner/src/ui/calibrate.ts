@@ -1,4 +1,4 @@
-import type { Dim, Provenance, VehicleProfile } from '../model/types.js';
+import type { Dim, FloorObstruction, Provenance, VehicleProfile } from '../model/types.js';
 import { CADDY_MAXI_LIFE_2K, cloneProfile } from '../model/vehicle.js';
 import type { AppState } from '../state.js';
 import { clear, el } from './dom.js';
@@ -6,17 +6,21 @@ import { clear, el } from './dom.js';
 /**
  * The calibrate panel.
  *
- * This is not a settings screen tucked away in a corner — it is the honest centre
- * of the tool. Half the shipped dimensions are inferred from published load volumes
- * rather than measured, and every check downstream inherits that uncertainty. So
- * each field wears its provenance openly, and typing your own number promotes it to
- * `measured` and marks it as trustworthy.
+ * This is not a settings screen tucked away in a corner — it is the honest centre of
+ * the tool. Every check downstream inherits the uncertainty in these numbers, so each
+ * field wears its provenance openly, and typing your own number promotes it to
+ * `measured`.
+ *
+ * The floor obstructions section matters as much as the dimensions: the third-row
+ * rails ship as estimates derived from the seat position, and until you can type real
+ * numbers in, every "will it sit flat" answer is a guess.
  */
 
 const PROVENANCE_LABEL: Record<Provenance, string> = {
   published: 'VW figure',
   derived: 'calculated',
   estimated: 'guess',
+  reference: 'measured for this model',
   measured: 'you measured',
 };
 
@@ -24,6 +28,9 @@ const PROVENANCE_HINT: Record<Provenance, string> = {
   published: 'From a VW spec sheet for this bodyshell.',
   derived: 'Calculated from published figures. Close, but check it.',
   estimated: 'An educated guess. This one really wants a tape measure.',
+  reference:
+    'Measured on this exact model by kofferraum.org. Trustworthy — but it was their ' +
+    'van, so trim levels and wear could still move it a little.',
   measured: 'Your own measurement.',
 };
 
@@ -53,15 +60,15 @@ export function buildCalibratePanel(state: AppState, onProfileChange: () => void
     clear(panel);
     const profile = state.layout.vehicle;
 
-    const unmeasured = FIELDS.filter((f) => profile[f.key].provenance !== 'measured'
-      && profile[f.key].provenance !== 'published').length;
+    const TRUSTED: Provenance[] = ['measured', 'published', 'reference'];
+    const unmeasured = FIELDS.filter((f) => !TRUSTED.includes(profile[f.key].provenance)).length;
 
     panel.append(
       el('h2', { class: 'panel__heading', text: 'Calibrate' }),
       el('p', { class: 'panel__hint' }, [
-        'VW published load dimensions for the Caddy ',
+        'The bay dimensions are measured figures for this model rather than VW ',
         el('em', { text: 'van' }),
-        ', not the Life with its second row in. Widths carry over; lengths do not. ',
+        ' shell figures, which describe bare metal you cannot load against. ',
         unmeasured > 0
           ? el('strong', {
               text: `${unmeasured} of these are still calculated or guessed — measure those first.`,
@@ -110,6 +117,8 @@ export function buildCalibratePanel(state: AppState, onProfileChange: () => void
 
     panel.append(grid);
 
+    panel.append(buildObstructionSection(state, profile, onProfileChange, render));
+
     panel.append(
       el('h3', { class: 'panel__subheading', text: 'Rear doors' }),
       el('div', { class: 'row' }, [
@@ -152,14 +161,18 @@ export function buildCalibratePanel(state: AppState, onProfileChange: () => void
 }
 
 /**
- * Anchors and brackets are positioned as fractions of the floor, so when the floor
- * length changes they have to move with it — otherwise correcting the length leaves
- * the lashing eyes hanging outside the van.
+ * Lashing eye positions are guesses pinned to the bay proportions, so when you correct
+ * the floor length they have to move with it — otherwise the eyes end up hanging
+ * outside the van.
+ *
+ * Floor obstructions deliberately do *not* move. They are physical objects at fixed
+ * positions, not fractions of the bay, and this used to reset them on every edit —
+ * which silently threw away a rail position the moment you corrected anything else.
  */
 function syncAnchorsToFloor(profile: VehicleProfile): void {
   const length = profile.floorLength.value;
-  const sideX = profile.widthBetweenArches.value / 2 - 40;
-  const rearX = profile.floorWidth.value / 2 - 180;
+  const sideX = profile.floorWidth.value / 2 - 40;
+  const rearX = profile.floorWidth.value / 2 - 120;
 
   const positions: Record<string, { x: number; y: number }> = {
     'eye-fl': { x: -sideX, y: 90 },
@@ -177,10 +190,142 @@ function syncAnchorsToFloor(profile: VehicleProfile): void {
       anchor.y = target.y;
     }
   }
+}
+
+/**
+ * Rails, brackets and anything else proud of the boot floor.
+ *
+ * Editable because the shipped rails are estimates and yours are whatever they are.
+ * The five numbers that matter are the ones asked for here; measure the rail itself,
+ * not the seat that used to sit on it.
+ */
+function buildObstructionSection(
+  state: AppState,
+  profile: VehicleProfile,
+  onProfileChange: () => void,
+  rerender: () => void,
+): HTMLElement {
+  const section = el('div', { class: 'panel__section' });
+
+  const changed = () => {
+    state.recompute();
+    onProfileChange();
+    rerender();
+  };
+
+  section.append(
+    el('h3', { class: 'panel__subheading', text: 'Floor obstructions' }),
+    el('p', {
+      class: 'panel__hint',
+      text:
+        'The rails the third row bolted to. A crate straddling both sits level, just ' +
+        'raised — it is a crate caught on one that rocks. These are estimates.',
+    }),
+  );
+
+  if (profile.floorObstructions.length === 0) {
+    section.append(el('p', { class: 'panel__empty', text: 'Nothing in the floor.' }));
+  }
 
   for (const obstruction of profile.floorObstructions) {
-    obstruction.y = length * 0.62;
+    section.append(
+      el('div', { class: 'obstruction' }, [
+        el('div', { class: 'obstruction__head' }, [
+          el('input', {
+            class: 'input input--label',
+            value: obstruction.label,
+            'aria-label': 'Obstruction name',
+            onchange: (e: Event) => {
+              obstruction.label = (e.target as HTMLInputElement).value;
+              changed();
+            },
+          }),
+          el('button', {
+            class: 'button button--icon',
+            type: 'button',
+            text: '×',
+            title: 'Remove',
+            onclick: () => {
+              profile.floorObstructions = profile.floorObstructions.filter(
+                (o) => o.id !== obstruction.id,
+              );
+              changed();
+            },
+          }),
+        ]),
+        el('div', { class: 'field-grid field-grid--pairs' }, [
+          obstructionField('Across', obstruction.x, (v) => {
+            obstruction.x = v;
+            changed();
+          }, '0 is the centreline'),
+          obstructionField('From seats', obstruction.y, (v) => {
+            obstruction.y = v;
+            changed();
+          }, 'To its centre'),
+          obstructionField('Width', obstruction.width, (v) => {
+            obstruction.width = Math.max(1, v);
+            changed();
+          }, 'Across the van'),
+          obstructionField('Length', obstruction.depth, (v) => {
+            obstruction.depth = Math.max(1, v);
+            changed();
+          }, 'Along the van'),
+          obstructionField('Height', obstruction.height, (v) => {
+            obstruction.height = Math.max(1, v);
+            changed();
+          }, 'Above the floor'),
+        ]),
+      ]),
+    );
   }
+
+  section.append(
+    el('button', {
+      class: 'button button--small',
+      type: 'button',
+      text: 'Add an obstruction',
+      onclick: () => {
+        const next: FloorObstruction = {
+          id: `obstruction-${Date.now().toString(36)}`,
+          label: 'Floor obstruction',
+          x: 0,
+          y: Math.round(profile.floorLength.value / 2),
+          width: 60,
+          depth: 400,
+          height: 25,
+        };
+        profile.floorObstructions = [...profile.floorObstructions, next];
+        changed();
+      },
+    }),
+  );
+
+  return section;
+}
+
+function obstructionField(
+  label: string,
+  value: number,
+  onChange: (value: number) => void,
+  hint: string,
+): HTMLElement {
+  return el('label', { class: 'field' }, [
+    el('span', { class: 'field__label', text: label }),
+    el('span', { class: 'field__input' }, [
+      el('input', {
+        class: 'input',
+        type: 'number',
+        value: String(Math.round(value)),
+        step: '5',
+        onchange: (e: Event) => {
+          const parsed = Number((e.target as HTMLInputElement).value);
+          if (!Number.isNaN(parsed)) onChange(parsed);
+        },
+      }),
+      el('span', { class: 'field__unit', text: 'mm' }),
+    ]),
+    el('span', { class: 'field__hint', text: hint }),
+  ]);
 }
 
 function radio(label: string, checked: boolean, onSelect: () => void): HTMLElement {

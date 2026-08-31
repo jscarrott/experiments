@@ -3,78 +3,105 @@ import { dim, type Anchor, type FloorObstruction, type VehicleProfile } from './
 /**
  * VW Caddy Maxi Life, Typ 2K (2010–2015 shape), third row removed, second row up.
  *
- * A word on where these numbers come from, because it matters:
+ * Where these numbers come from, because it decides how much to trust the tool:
  *
- * VW published load-compartment dimensions for the Caddy *van*, not for the Life
- * with its second-row seats in place. The width figures carry over — the body is
- * the same shell — but the load *length* does not, because the van measures from
- * the bulkhead and the Life measures from the back of the second row.
+ * VW published load-compartment dimensions for the Caddy *van*, and those turn out to
+ * be the wrong figures for a Life. The van numbers are bare metal between the panels;
+ * a Life is trimmed, and the trim is what you actually load against. VW's 1552 mm
+ * "maximum load width" is not available to you at any height.
  *
- * So: widths and heights are `published`, the arch intrusion is `derived` from two
- * published widths, and the lengths are `derived` from Parkers' quoted 1.6 m³ /
- * 3.9 m³ load volumes. The aperture and sill are frankly `estimated`.
+ * So the bay dimensions here come from kofferraum.org's measured drawing of the 2010
+ * Maxi 3-row (`reference`), which measures the usable box rather than the shell. It
+ * gives a load bay that is essentially parallel-sided at about 1120 mm — the side trim
+ * runs roughly flush with the tops of the wheel arches, so the arches do not eat into
+ * anything the trim has not already taken.
  *
- * Anything not marked `published` wants twenty minutes with a tape measure, and
- * the Calibrate panel exists so you can put your own numbers in. The tool is only
- * as good as these values.
+ * That drawing gives all three seat configurations. Only the middle one is modelled
+ * here, but the others are worth knowing:
+ *   - 620 mm behind the third row, all seven seats up
+ *   - 1540 mm behind the second row, third row out  ← this profile
+ *   - 1910 mm behind the front seats, second row folded too
+ *
+ * What is still guesswork: the tailgate aperture, the wheel arch dimensions (which no
+ * longer affect anything, since the trim binds first) and the third-row rails. Those
+ * are marked `estimated` and want a tape measure.
  */
 export const CADDY_MAXI_LIFE_2K: VehicleProfile = {
   id: 'caddy-maxi-life-2k',
   name: 'Caddy Maxi Life (2K, 2010–2015)',
   description:
-    'Third row removed, second row upright. Widths are VW published figures for the ' +
-    'Caddy 2K bodyshell; lengths are derived from quoted load volumes and should be ' +
-    'measured. Yours is a 64 plate, so this is the pre-facelift shape.',
+    'Third row removed, second row upright. Bay dimensions are kofferraum.org measured ' +
+    'figures for the 2010 Maxi 3-row — the usable trimmed space, not VW van shell ' +
+    'figures. The tailgate opening and the third-row rails are still estimates. Yours ' +
+    'is a 64 plate, so this is the pre-facelift shape.',
   rearDoors: 'tailgate',
 
   floorLength: dim(
-    1100,
-    'derived',
-    'From the 1.6 m³ quoted with the third row out, divided by the average usable ' +
-      'cross-section. Measure seat-back to load lip and correct this first — every ' +
-      'other check depends on it.',
+    1540,
+    'reference',
+    'Second-row seat backs to the load lip with the third row out. kofferraum.org ' +
+      'measured 154 cm. For comparison: 62 cm with all seven seats up, 191 cm with the ' +
+      'second row folded as well.',
   ),
-  floorWidth: dim(1552, 'published', 'VW maximum load width, Caddy 2K.'),
-  widthBetweenArches: dim(1172, 'published', 'VW figure, Caddy 2K.'),
-  loadHeight: dim(1262, 'published', 'VW maximum load height, Maxi. Floor to roof lining at the highest point.'),
+  floorWidth: dim(
+    1120,
+    'reference',
+    "Usable width between the side trim. VW's 1552 mm is bare metal in a van and is not " +
+      'available in a trimmed Life.',
+  ),
+  widthBetweenArches: dim(
+    1120,
+    'reference',
+    'The same as the floor width: the trim runs roughly flush with the arch tops, so ' +
+      'the arches take nothing the trim has not already taken.',
+  ),
+  loadHeight: dim(
+    1130,
+    'reference',
+    "Floor to roof lining. VW's 1262 mm is the van's bare shell height.",
+  ),
 
   archHeight: dim(340, 'estimated', 'Floor to the top of the wheel arch box.'),
   archIntrusion: dim(
-    190,
-    'derived',
-    'Half the difference between max load width and width between arches: (1552 − 1172) / 2.',
+    0,
+    'reference',
+    'Nil: the arches sit behind trim that is already the narrowest point. Set this ' +
+      'above zero only if your arches actually stand proud of the side trim.',
   ),
   archLength: dim(700, 'estimated', 'Fore-aft length of the arch box.'),
-  archStartY: dim(150, 'estimated', 'Seat backs to the front face of the arch.'),
+  archStartY: dim(400, 'estimated', 'Seat backs to the front face of the arch.'),
 
   widthAtRoof: dim(
-    1300,
-    'estimated',
-    'The side walls lean inwards as they rise. This is why a tall box that fits on ' +
-      'the floor can still foul the trim at head height.',
+    1110,
+    'reference',
+    'Barely narrower than the floor — this is a van body, so the sides are close to ' +
+      'vertical rather than tumbling in like a car.',
   ),
 
-  apertureWidth: dim(1220, 'estimated', 'Clear width of the tailgate opening.'),
-  apertureHeight: dim(1100, 'estimated', 'Clear height of the tailgate opening.'),
-  sillHeight: dim(600, 'estimated', 'Ground to the load lip. What you lift over.'),
+  apertureWidth: dim(1100, 'estimated', 'Clear width of the tailgate opening, between the D-pillars.'),
+  apertureHeight: dim(1050, 'estimated', 'Clear height of the tailgate opening.'),
+  sillHeight: dim(
+    590,
+    'reference',
+    'Ground to the load lip. There is also a 2 cm step up from the lip to the boot floor.',
+  ),
 
   seatBackRake: dim(12, 'estimated', 'Degrees off vertical, leaning forwards.'),
 
   payloadKg: dim(600, 'estimated', 'Check the plate in your door shut for the real figure.'),
 
-  anchors: factoryAnchors(1100, 1552, 1172),
-  floorObstructions: thirdRowBrackets(1100),
+  anchors: factoryAnchors(1540, 1120),
+  floorObstructions: thirdRowRails(1540),
 };
 
 /**
  * The six factory floor lashing eyes. Two rows of two down the sides plus a pair
- * at the rear. Positions are estimated from the load bay proportions — drag them
+ * at the rear. Positions are estimated from the load bay proportions — correct them
  * in the calibrate panel to match where yours actually are.
  */
-function factoryAnchors(floorLength: number, floorWidth: number, betweenArches: number): Anchor[] {
-  // Side eyes sit inboard of the trim; the rear pair sit just ahead of the load lip.
-  const sideX = betweenArches / 2 - 40;
-  const rearX = floorWidth / 2 - 180;
+function factoryAnchors(floorLength: number, floorWidth: number): Anchor[] {
+  const sideX = floorWidth / 2 - 40;
+  const rearX = floorWidth / 2 - 120;
 
   return [
     { id: 'eye-fl', label: 'Front left', x: -sideX, y: 90, z: 0, kind: 'factory-eye', ratingKg: 200 },
@@ -87,15 +114,23 @@ function factoryAnchors(floorLength: number, floorWidth: number, betweenArches: 
 }
 
 /**
- * The third-row seat mounting brackets stay in the floor once the seats come out.
- * They are the reason a crate that "obviously fits" ends up rocking on one corner,
- * so they are modelled rather than ignored.
+ * The rails the third row mounts to, which stay in the floor once the seats come out.
+ *
+ * These are estimates, and the reasoning is written down so you can check it rather
+ * than take it on faith: the third row leaves 620 mm of boot behind it, so its seat
+ * back sits at y ≈ 920, and a bench base around 400 mm deep puts its mountings across
+ * roughly y 520–950. Hence a 430 mm rail centred at y = 735.
+ *
+ * Two parallel rails of the same height are not necessarily a problem — a crate
+ * straddling both sits level, just raised. It is a crate caught on one of them that
+ * rocks. `fit.ts` makes that distinction.
  */
-function thirdRowBrackets(floorLength: number): FloorObstruction[] {
-  const y = floorLength * 0.62;
+function thirdRowRails(floorLength: number): FloorObstruction[] {
+  const centre = floorLength - 805; // 620 behind the third row, minus half the rail
+
   return [
-    { id: 'bracket-l', label: 'Third-row bracket (left)', x: -420, y, width: 120, depth: 90, height: 25 },
-    { id: 'bracket-r', label: 'Third-row bracket (right)', x: 420, y, width: 120, depth: 90, height: 25 },
+    { id: 'rail-l', label: 'Third-row rail (left)', x: -330, y: centre, width: 60, depth: 430, height: 25 },
+    { id: 'rail-r', label: 'Third-row rail (right)', x: 330, y: centre, width: 60, depth: 430, height: 25 },
   ];
 }
 

@@ -128,3 +128,91 @@ test('a box on a third-row bracket is flagged as rocking', () => {
   const clear = checkFit([place('a', 'crate', 300, 300)], withBrackets, lookup);
   assert.ok(!clear.some((i) => i.kind === 'on-obstruction'));
 });
+
+// --- Third-row rails -------------------------------------------------------
+
+/** Two parallel fore-aft rails, as the Caddy leaves behind when the seats come out. */
+function railProfile(height = 25) {
+  const p = testProfile();
+  p.floorObstructions = [
+    { id: 'rail-l', label: 'Third-row rail (left)', x: -330, y: 700, width: 60, depth: 430, height },
+    { id: 'rail-r', label: 'Third-row rail (right)', x: 330, y: 700, width: 60, depth: 430, height },
+  ];
+  return p;
+}
+
+test('a crate straddling both rails sits level and is not treated as rocking', () => {
+  const profile = railProfile();
+  // 800 wide spans from -400 to 400, so it bears on both rails at ±330.
+  const lookup = makeLookup([spec('wide-crate', 800, 400, 300)]);
+  const issues = checkFit([place('a', 'wide-crate', 0, 700, 25)], profile, lookup);
+
+  const rail = issues.find((i) => i.kind === 'on-obstruction');
+  assert.ok(rail, 'it should still say something — you have lost 25 mm of headroom');
+  assert.match(rail.message, /level/, 'but it should say it sits level, not that it rocks');
+  assert.doesNotMatch(rail.message, /rock/);
+});
+
+test('a crate caught on one rail only is reported as rocking', () => {
+  const profile = railProfile();
+  // 400 wide centred on the left rail: nothing under its other side.
+  const lookup = makeLookup([spec('crate', 400, 400, 300)]);
+  const issues = checkFit([place('a', 'crate', -330, 700, 25)], profile, lookup);
+
+  const rail = issues.find((i) => i.kind === 'on-obstruction');
+  assert.ok(rail);
+  assert.match(rail.message, /rock/);
+});
+
+test('rails of different heights make a straddling crate rock', () => {
+  const profile = railProfile();
+  profile.floorObstructions[1]!.height = 40; // one rail sits proud of the other
+  const lookup = makeLookup([spec('wide-crate', 800, 400, 300)]);
+  const issues = checkFit([place('a', 'wide-crate', 0, 700, 25)], profile, lookup);
+
+  const rail = issues.find((i) => i.kind === 'on-obstruction');
+  assert.ok(rail);
+  assert.match(rail.message, /different heights/);
+});
+
+test('a crate clear of the rails is left alone', () => {
+  const profile = railProfile();
+  const lookup = makeLookup([spec('crate', 600, 400, 300)]);
+  const issues = checkFit([place('a', 'crate', 0, 200, 0)], profile, lookup);
+  assert.ok(!issues.some((i) => i.kind === 'on-obstruction'));
+});
+
+test('a box stacked up high is not accused of sitting on the rails below it', () => {
+  const profile = railProfile();
+  const lookup = makeLookup([spec('crate', 600, 400, 300)]);
+  const issues = checkFit([place('a', 'crate', 0, 700, 400)], profile, lookup);
+  assert.ok(!issues.some((i) => i.kind === 'on-obstruction'));
+});
+
+test('the too-wide message blames the trim, not the arches, when arches are flush', () => {
+  const flush = testProfile();
+  flush.floorWidth = { value: 1120, provenance: 'measured' };
+  flush.widthBetweenArches = { value: 1120, provenance: 'measured' };
+  flush.widthAtRoof = { value: 1110, provenance: 'measured' };
+
+  const lookup = makeLookup([spec('too-wide', 1200, 400, 300)]);
+  const issues = checkFit([place('a', 'too-wide', 0, 600, 0)], flush, lookup);
+
+  const wide = issues.find((i) => i.kind === 'too-wide');
+  assert.ok(wide);
+  assert.doesNotMatch(wide.message, /wheel arch/, 'the arches are flush — they are not the cause');
+  assert.match(wide.message, /the bay is not that wide/);
+  // A shade under 1120: the box is 300 tall and the sides still lean in very slightly.
+  assert.match(wide.message, /111\d mm/, 'it should say how much room there actually is');
+});
+
+test('the too-wide message does still blame the arches when they genuinely intrude', () => {
+  // testProfile() keeps the van-like 1552 / 1172 split on purpose.
+  const lookup = makeLookup([spec('wide', 1300, 400, 200)]);
+  const archY = profile.archStartY.value + 350;
+  const issues = checkFit([place('a', 'wide', 0, archY, 0)], profile, lookup);
+
+  const wide = issues.find((i) => i.kind === 'too-wide');
+  assert.ok(wide);
+  assert.match(wide.message, /wheel arches/);
+});

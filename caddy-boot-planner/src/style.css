@@ -404,6 +404,8 @@ input[type="number"] { font-family: var(--mono); }
 
 .calibrate__tag--published { background: rgba(90, 209, 168, 0.16); color: var(--accent); }
 .calibrate__tag--measured { background: rgba(90, 209, 168, 0.16); color: var(--accent); }
+/* Trustworthy, but somebody else's van — blue rather than the green of your own tape. */
+.calibrate__tag--reference { background: rgba(127, 212, 255, 0.16); color: #7fd4ff; }
 .calibrate__tag--derived { background: rgba(224, 163, 58, 0.16); color: #e0b955; }
 .calibrate__tag--estimated { background: rgba(224, 90, 90, 0.16); color: #ff9d9d; }
 
@@ -444,4 +446,22 @@ input[type="number"] { font-family: var(--mono); }
   .sidebar { max-height: 40vh; }
   .sidebar--left { grid-row: 2; border-right: none; border-top: 1px solid var(--line); }
   .sidebar--right { grid-row: 3; border-left: none; border-top: 1px solid var(--line); }
+}
+
+/* --- Floor obstructions ------------------------------------------------- */
+
+.obstruction {
+  margin: 8px 0;
+  padding: 9px;
+  background: var(--panel-2);
+  border-radius: var(--radius);
+}
+
+.obstruction__head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.obstruction__head .input--label { font-size: 12px; }
+
+.field-grid--pairs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }

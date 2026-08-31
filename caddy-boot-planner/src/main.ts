@@ -6,6 +6,7 @@ import { AppState, defaultLayout } from './state.js';
 import { loadCurrent, saveCurrent } from './model/layout.js';
 import { aabbOf } from './geometry/boxes.js';
 import { restingHeight } from './geometry/stacking.js';
+import { obstructionBoxes } from './geometry/shell.js';
 import { Viewer, type ViewName } from './scene/viewer.js';
 import { buildShell, MM } from './scene/shellMesh.js';
 import { buildBoxMesh, disposeBoxMesh, positionBoxGroup, setBoxState, type BoxMesh } from './scene/boxMeshes.js';
@@ -259,7 +260,7 @@ viewer.renderer.domElement.addEventListener('pointerup', (event: PointerEvent) =
     // Drop it onto whatever is underneath, so dragging a box over another stacks it
     // rather than leaving it hovering or intersecting.
     const others = state.layout.boxes.filter((b) => b.id !== box.id);
-    box.z = restingHeight(box, others, state.lookup);
+    box.z = restingHeight(box, others, state.lookup, obstructionBoxes(state.layout.vehicle));
   }
 
   viewer.controls.enabled = true;

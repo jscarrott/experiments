@@ -236,14 +236,20 @@ function withinSpan(aabb: Aabb, span: Span): boolean {
   return cx >= span.minX && cx <= span.maxX && cy >= span.minY && cy <= span.maxY;
 }
 
-/** A sensible default net for a Caddy boot: clipped to all six floor eyes. */
+/**
+ * A sensible default net for a Caddy boot: clipped to all six floor eyes.
+ *
+ * Sized as a net you would actually buy for a bay this long. A small 700 mm square
+ * net stretched across 1.5 m reports as permanently over-stretched, and a warning
+ * that is always on is a warning nobody reads.
+ */
 export function defaultNet(anchorIds: string[]): CargoNet {
   return {
     id: 'net-1',
     label: 'Elasticated cargo net',
     anchorIds,
-    relaxedWidth: 700,
-    relaxedLength: 700,
+    relaxedWidth: 1000,
+    relaxedLength: 900,
     // Most stretch nets are useful to roughly twice their relaxed size; past that
     // the elastic is near its limit and holding much less than you would hope.
     maxStretchRatio: 2.0,

@@ -86,7 +86,10 @@ test('an oversized box is reported as not fitting', async ({ page }) => {
   });
 
   expect((await planner(page)).errors).toBeGreaterThan(0);
-  await expect(page.locator('.warnings__item--error').first()).toContainText('wheel arches');
+  // The shipped Life profile is parallel-sided, so the bay itself is the constraint —
+  // naming the wheel arches here would send you to measure the wrong part of the van.
+  await expect(page.locator('.warnings__item--error').first()).toContainText('too wide');
+  await expect(page.locator('.warnings__item--error').first()).not.toContainText('wheel arch');
 });
 
 test('the net reports a short box between two tall ones as bridged', async ({ page }) => {
@@ -104,15 +107,15 @@ test('the net reports a short box between two tall ones as bridged', async ({ pa
     const middle = state.addBox('custom');
     const back = state.addBox('custom');
 
-    const wide = { width: 1100, depth: 300, height: 700 };
-    state.updateBox(front.id, { x: 0, y: 200, contentsKg: 10, overrides: wide });
+    const wide = { width: 1000, depth: 300, height: 700 };
+    state.updateBox(front.id, { x: 0, y: 250, contentsKg: 10, overrides: wide });
     state.updateBox(middle.id, {
       x: 0,
-      y: 550,
+      y: 700,
       contentsKg: 15,
-      overrides: { width: 1100, depth: 300, height: 200 },
+      overrides: { width: 1000, depth: 300, height: 200 },
     });
-    state.updateBox(back.id, { x: 0, y: 900, contentsKg: 10, overrides: wide });
+    state.updateBox(back.id, { x: 0, y: 1150, contentsKg: 10, overrides: wide });
 
     state.setNetEnabled(true);
     state.updateNet(state.layout.nets[0].id, {
@@ -152,15 +155,18 @@ test('a cord between the mid anchors does catch a low box sitting over them', as
     const middle = state.addBox('custom');
     const back = state.addBox('custom');
 
-    const wide = { width: 1100, depth: 300, height: 700 };
-    state.updateBox(front.id, { x: 0, y: 200, contentsKg: 10, overrides: wide });
+    // Straddle the short box over the mid lashing eyes, which sit at 0.55 of the
+    // 1540 mm floor. A cord between them runs directly underneath it.
+    const midY = Math.round(state.layout.vehicle.floorLength.value * 0.55);
+    const wide = { width: 1000, depth: 300, height: 700 };
+    state.updateBox(front.id, { x: 0, y: midY - 400, contentsKg: 10, overrides: wide });
     state.updateBox(middle.id, {
       x: 0,
-      y: 550,
+      y: midY,
       contentsKg: 15,
-      overrides: { width: 1100, depth: 300, height: 200 },
+      overrides: { width: 1000, depth: 300, height: 200 },
     });
-    state.updateBox(back.id, { x: 0, y: 900, contentsKg: 10, overrides: wide });
+    state.updateBox(back.id, { x: 0, y: midY + 400, contentsKg: 10, overrides: wide });
 
     state.setNetEnabled(true);
 
@@ -175,9 +181,9 @@ test('calibrating a dimension marks it as measured and re-runs the checks', asyn
   await page.goto('/');
   await expect(page.locator('canvas')).toBeVisible();
 
-  // Floor length ships as "calculated" — it is derived from a load volume.
+  // Floor length now ships as a measured figure for this model rather than a guess.
   const lengthField = page.locator('.calibrate__field').first();
-  await expect(lengthField.locator('.calibrate__tag')).toHaveText('calculated');
+  await expect(lengthField.locator('.calibrate__tag')).toHaveText('measured for this model');
 
   await lengthField.locator('input').fill('1450');
   await lengthField.locator('input').blur();
@@ -188,4 +194,28 @@ test('calibrating a dimension marks it as measured and re-runs the checks', asyn
     () => (window as any).__planner.state.layout.vehicle.floorLength.value,
   );
   expect(floorLength).toBe(1450);
+});
+
+test('a rail position survives editing some other dimension', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('canvas')).toBeVisible();
+
+  // Put a real measurement into the first rail.
+  const railY = page.locator('.obstruction').first().locator('input[type="number"]').nth(1);
+  await railY.fill('1180');
+  await railY.blur();
+
+  expect(
+    await page.evaluate(() => (window as any).__planner.state.layout.vehicle.floorObstructions[0].y),
+  ).toBe(1180);
+
+  // Now correct an unrelated dimension. This used to reset every obstruction to a
+  // fraction of the floor length, silently throwing the measurement away.
+  const lengthField = page.locator('.calibrate__field').first();
+  await lengthField.locator('input').fill('1600');
+  await lengthField.locator('input').blur();
+
+  expect(
+    await page.evaluate(() => (window as any).__planner.state.layout.vehicle.floorObstructions[0].y),
+  ).toBe(1180);
 });

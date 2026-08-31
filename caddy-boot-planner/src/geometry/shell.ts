@@ -4,15 +4,15 @@ import type { Aabb, VehicleProfile } from '../model/types.js';
  * The load bay, as pure geometry. No Three.js here — the scene layer consumes this.
  *
  * The central idea: rather than treat the bay as a bounding box, we describe the
- * *available half-width at a given height and distance back*. That single function
- * is what makes the fit checks honest, because it naturally captures the two things
- * that catch people out:
+ * *available half-width at a given height and distance back*. That single function is
+ * what makes the fit checks honest, because it captures both ways a bay narrows —
+ * wheel arches eating into the lower sides, and walls leaning in as they rise — and
+ * reports whichever binds over the span a given box actually occupies.
  *
- *   - below arch height, the bay is 1172 mm wide, not 1552 mm
- *   - as you go up, the walls lean in, so the usable width shrinks again
- *
- * A naive bounding-box check misses both and cheerfully tells you a 1.5 m wide
- * crate fits on the floor. It does not.
+ * Which of the two binds is a property of the vehicle, not a constant. On a van the
+ * arches usually win; on a trimmed Caddy Life the side trim is already narrower than
+ * the arches everywhere, so they never do. A check written around one headline width
+ * gets the other case confidently wrong.
  */
 
 /** Half the available width at height z and distance y back from the seats. */
@@ -95,10 +95,17 @@ export function wallSections(profile: VehicleProfile, steps = 12): { z: number; 
   return sections;
 }
 
-/** Bounding boxes of the two wheel arches, for rendering and clash checks. */
+/**
+ * Bounding boxes of the two wheel arches, for rendering and clash checks.
+ *
+ * Returns nothing when the arches do not stand proud of the side trim, which is the
+ * case on a trimmed Caddy Life. Zero-width solids would otherwise be built and drawn,
+ * and a clash test against a zero-width box is meaningless anyway.
+ */
 export function archBoxes(profile: VehicleProfile): Aabb[] {
   const outer = profile.floorWidth.value / 2;
   const inner = profile.widthBetweenArches.value / 2;
+  if (outer - inner < ARCH_MIN_INTRUSION) return [];
   const y0 = profile.archStartY.value;
   const y1 = y0 + profile.archLength.value;
   const h = profile.archHeight.value;
@@ -109,7 +116,7 @@ export function archBoxes(profile: VehicleProfile): Aabb[] {
   ];
 }
 
-/** Bounding boxes of the third-row seat brackets left in the floor. */
+/** Bounding boxes of whatever is proud of the floor — on a Life, the third-row rails. */
 export function obstructionBoxes(profile: VehicleProfile): (Aabb & { label: string; id: string })[] {
   return profile.floorObstructions.map((o) => ({
     id: o.id,
@@ -122,6 +129,9 @@ export function obstructionBoxes(profile: VehicleProfile): (Aabb & { label: stri
     maxZ: o.height,
   }));
 }
+
+/** Below this, an arch is flush with the trim and not worth modelling as a solid. */
+const ARCH_MIN_INTRUSION = 5;
 
 export function clamp(value: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, value));

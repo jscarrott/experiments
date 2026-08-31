@@ -1,4 +1,4 @@
-import type { BoxSpec, PlacedBox } from '../model/types.js';
+import type { Aabb, BoxSpec, PlacedBox } from '../model/types.js';
 import { aabbOf, footprintArea, footprintOverlapArea } from './boxes.js';
 
 /**
@@ -195,14 +195,19 @@ export function stackBounds(stack: Stack, boxes: PlacedBox[], lookup: SpecLookup
 }
 
 /**
- * Where should a box land if dropped at this spot? Returns the height of the
- * highest surface under its footprint, so dragging a box over another snaps it
- * on top rather than through it.
+ * Where should a box land if dropped at this spot? Returns the height of the highest
+ * surface under its footprint, so dragging a box over another snaps it on top rather
+ * than through it.
+ *
+ * Floor obstructions count as surfaces too. Without them a crate dragged over the
+ * third-row rails sits at z = 0 with the rails passing through it, which both looks
+ * wrong and quietly overstates your headroom by the height of the rail.
  */
 export function restingHeight(
   candidate: PlacedBox,
   others: PlacedBox[],
   lookup: SpecLookup,
+  obstructions: Aabb[] = [],
 ): number {
   const candidateAabb = aabbOf(lookup(candidate.specId), candidate);
   let top = 0;
@@ -211,6 +216,10 @@ export function restingHeight(
     const otherAabb = aabbOf(lookup(other.specId), other);
     if (footprintOverlapArea(candidateAabb, otherAabb) <= 0) continue;
     top = Math.max(top, otherAabb.maxZ);
+  }
+  for (const obstruction of obstructions) {
+    if (footprintOverlapArea(candidateAabb, obstruction) <= 0) continue;
+    top = Math.max(top, obstruction.maxZ);
   }
   return top;
 }

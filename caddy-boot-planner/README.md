@@ -9,13 +9,22 @@ Built for attached-lid containers (Gatortote / Totebox style) and DeWalt TOUGHSY
 
 ## Why it isn't just a box-in-a-box calculator
 
-Three things make eyeballing this unreliable, and each is modelled:
+Four things make eyeballing this unreliable, and each is modelled:
 
-**The load bay is not a box.** Below wheel-arch height it is 1172 mm wide, not 1552 mm.
-The side walls lean inward as they rise. The tailgate opening is smaller than the space
-behind it. So instead of a bounding box, the bay is described as *available half-width
-at a given height and distance back* (`src/geometry/shell.ts`), and every fit check is
-measured against the narrowest point over the span a box actually occupies.
+**The usable bay is not the bay VW published.** The load space is about
+**1120 mm wide × 1540 mm long × 1130 mm to the roof lining**. VW's published figures
+describe the Caddy *van* — bare metal between the panels, measured from a bulkhead you
+do not have. Their 1552 mm "maximum load width" is not available to you at any height,
+and their 1262 mm height is the shell before it is trimmed. So the bay is described as
+*available half-width at a given height and distance back* (`src/geometry/shell.ts`),
+and a box is checked against the narrowest point over the span it actually occupies —
+which on a van with proud wheel arches is the arches, and on a trimmed Life is the side
+trim, the whole way up.
+
+**It has to get through the hole first.** The tailgate opening is smaller than the space
+behind it, so every box, and every latched stack as a unit, is tested against it in all
+six orientations. A long thin box goes in end-first; something large on its two smallest
+dimensions does not go in at all.
 
 **Latching and stacking are different things.** A TOUGHSYSTEM stack latches into one
 rigid unit: it has to go through the tailgate as a unit, but it will not shed its top
@@ -29,34 +38,53 @@ nothing. It looks restrained. It is not. `src/geometry/net.ts` computes the drap
 reports which boxes the net actually bears on, and the 3D view draws the membrane so
 you can see it lift clear.
 
-## The dimensions want checking
+### The third-row rails
 
-VW published load-compartment figures for the Caddy **van**, not for the Life with its
-second-row seats in place. The widths carry over — same bodyshell — but the lengths do
-not, because the van measures from the bulkhead.
+Taking the third row out leaves its mounting rails in the floor, and they are modelled
+because they decide what sits flat. The distinction that matters: two parallel rails of
+the same height are **not** a problem — a crate straddling both sits dead level, just
+raised by the height of the rail, which costs you that much headroom. It is a crate
+caught on *one* rail, or bridging rails of different heights, that rocks on a corner.
 
-| Dimension | Default | Where it came from |
+A useful consequence for this van: a 600 mm Euro crate is almost exactly the gap between
+the rails, so it drops between them onto the floor rather than perching on them.
+
+The shipped rail figures are **estimates** derived from the third row's position. They
+are editable in the Calibrate panel along with everything else.
+
+## Where the dimensions come from
+
+The bay figures are **measured for this model** by kofferraum.org, from their drawing of
+the 2010 Maxi 3-row — the usable trimmed space rather than VW's van shell figures.
+
+| Dimension | Value | Source |
 |---|---|---|
-| Width between wheel arches | 1172 mm | VW figure |
-| Max load width | 1552 mm | VW figure |
-| Max load height | 1262 mm | VW figure (Maxi) |
-| Wheel arch intrusion per side | 190 mm | Calculated: (1552 − 1172) / 2 |
-| Floor length, third row out | ~1100 mm | **Derived from the quoted 1.6 m³** |
-| Tailgate opening | ~1220 × 1100 mm | **Estimated** |
-| Ground to load lip | ~600 mm | **Estimated** |
-| Floor lashing eyes | 6 | Published |
+| Floor length, third row out | 1540 mm | Measured for this model |
+| Usable width | 1120 mm | Measured for this model |
+| Floor to roof lining | 1130 mm | Measured for this model |
+| Width at roof height | 1110 mm | Measured for this model |
+| Ground to load lip | 590 mm | Measured for this model |
+| Tailgate opening | ~1100 × 1050 mm | **Estimated** |
+| Third-row rails | 60 × 430 × 25 mm | **Estimated** |
+| Lashing eye positions | — | **Estimated** |
+| Payload | 600 kg | **Estimated** — check your door plate |
 
-Everything below the line wants a tape measure. The **Calibrate** panel makes every
-dimension editable and shows its provenance; typing your own number promotes it to
-"you measured" and every check re-runs against it. Box catalogue sizes work the same
-way — per-box overrides live in the inspector.
+The same drawing gives the other two seat configurations, if you ever need them:
+**620 mm** behind the third row with all seven seats up, and **1910 mm** with the second
+row folded as well.
+
+Everything marked estimated wants a tape measure. The **Calibrate** panel makes every
+dimension editable and colour-codes it by provenance — a VW figure, a figure measured
+for this model, a calculation, a guess, or your own measurement. Typing your own number
+promotes it to "you measured" and re-runs every check. Box catalogue sizes work the same
+way, with per-box overrides in the inspector.
 
 ## Running it
 
 ```bash
 npm install
 npm run dev          # dev server
-npm test             # unit tests over the pure geometry (35 tests)
+npm test             # unit tests over the pure geometry (55 tests)
 npm run test:e2e     # Playwright smoke tests
 npm run check        # typecheck + unit + build + e2e
 ```
@@ -83,17 +111,17 @@ src/
   ui/          DOM panels: catalogue, inspector, checks, tie-down, calibrate
 ```
 
-The split matters: `geometry/` imports nothing from `three`, so the fit maths, net drape
-and strap lengths are tested with `node --test` and no browser. `state.ts` runs the whole
-analysis on every change rather than patching it incrementally — it is well under a
+The split matters: `geometry/` imports nothing from `three`, so the fit maths, net drape,
+rail support and strap lengths are tested with `node --test` and no browser. `state.ts`
+runs the whole analysis on every change rather than patching it incrementally — under a
 millisecond for a boot's worth of boxes, and it means the warnings panel can never
 disagree with the 3D view.
 
 ## Controls
 
-Drag a box to move it; it drops onto whatever is beneath. `R` rotates 90°, `D`
-duplicates, `Delete` removes, arrow keys nudge by the snap increment (shift for ×5).
-Click two floor anchors to run a strap between them.
+Drag a box to move it; it drops onto whatever is beneath, including the third-row
+rails. `R` rotates 90°, `D` duplicates, `Delete` removes, arrow keys nudge by the snap
+increment (shift for ×5). Click two floor anchors to run a strap between them.
 
 ## What it deliberately doesn't do
 

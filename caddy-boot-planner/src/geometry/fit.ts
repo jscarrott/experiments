@@ -1,5 +1,5 @@
-import type { PlacedBox, VehicleProfile } from '../model/types.js';
-import { aabbOf, overlaps } from './boxes.js';
+import type { Aabb, PlacedBox, VehicleProfile } from '../model/types.js';
+import { aabbOf, footprintOverlaps, overlaps } from './boxes.js';
 import { archBoxes, minHalfWidthOver, obstructionBoxes } from './shell.js';
 import { findStacks, stackBounds, type SpecLookup } from './stacking.js';
 
@@ -26,6 +26,9 @@ export interface FitIssue {
   severity: IssueSeverity;
   message: string;
 }
+
+/** A box within this of an obstruction's top counts as resting on it, mm. */
+const CONTACT_TOLERANCE = 2;
 
 /** Above this height the load starts filling the rear window. */
 const REAR_VIEW_HEIGHT_FRACTION = 0.75;
@@ -59,22 +62,20 @@ export function checkFit(
     const aabb = aabbOf(spec, box);
 
     // The width check that matters: measured against the narrowest the bay gets
-    // over the height and length this box actually occupies. A crate spanning the
-    // wheel arches is checked against 1172 mm, not the 1552 mm maximum.
+    // over the height and length this box actually occupies, rather than against a
+    // single headline width. Which of the three things below is doing the narrowing
+    // depends on the vehicle, so the message has to work it out rather than assume.
     const halfWidth = minHalfWidthOver(profile, aabb.minZ, aabb.maxZ, aabb.minY, aabb.maxY);
     const reach = Math.max(Math.abs(aabb.minX), Math.abs(aabb.maxX));
     if (reach > halfWidth + 1) {
       const overBy = Math.round((reach - halfWidth) * 2);
-      const archLimited = halfWidth <= profile.widthBetweenArches.value / 2 + 1;
+      const available = Math.round(halfWidth * 2);
       issues.push({
         boxId: box.id,
         kind: 'too-wide',
         severity: 'error',
-        message: archLimited
-          ? `${box.label} is about ${overBy} mm too wide to pass between the wheel arches. ` +
-            `You have ${Math.round(halfWidth * 2)} mm there.`
-          : `${box.label} fouls the side trim by about ${overBy} mm — the walls lean in as they rise, ` +
-            `so there is only ${Math.round(halfWidth * 2)} mm at that height.`,
+        message: `${box.label} is about ${overBy} mm too wide — ${whyNarrow(profile, halfWidth, aabb)}` +
+          ` You have ${available} mm there.`,
       });
     }
 
@@ -107,21 +108,8 @@ export function checkFit(
       });
     }
 
-    // A box sitting on the floor across a third-row bracket rocks on one corner.
-    if (aabb.minZ < 1) {
-      for (const obstruction of obstructionBoxes(profile)) {
-        if (overlaps({ ...aabb, maxZ: Math.max(aabb.maxZ, 1) }, obstruction)) {
-          issues.push({
-            boxId: box.id,
-            kind: 'on-obstruction',
-            severity: 'warning',
-            message:
-              `${box.label} is sitting on the ${obstruction.label.toLowerCase()}, so it will rock. ` +
-              `Move it clear or pack something under it.`,
-          });
-        }
-      }
-    }
+    const railIssue = checkFloorSupport(box, aabb, profile);
+    if (railIssue) issues.push(railIssue);
 
     // Wheel arches as solids, for a box floating at arch height beside one.
     for (const arch of archBoxes(profile)) {
@@ -190,6 +178,85 @@ export function checkFit(
   }
 
   return issues;
+}
+
+/**
+ * Which feature is actually pinching the bay here?
+ *
+ * Getting this right matters more than it looks. The tool shipped assuming the wheel
+ * arches were always the culprit, which was true of the van the published figures came
+ * from and false of a trimmed Life, where the side trim is narrower than the arches
+ * everywhere. A message that blames the wrong thing sends you out to measure the wrong
+ * part of the van.
+ */
+function whyNarrow(profile: VehicleProfile, halfWidth: number, aabb: Aabb): string {
+  const archesIntrude = profile.widthBetweenArches.value < profile.floorWidth.value - 1;
+  const archBound = halfWidth <= profile.widthBetweenArches.value / 2 + 1;
+
+  if (archesIntrude && archBound && aabb.minZ < profile.archHeight.value) {
+    return 'it will not pass between the wheel arches.';
+  }
+
+  // Only blame the taper if there is a meaningful one and the box is high enough to
+  // meet it. On a van body the sides are near vertical and this never applies.
+  const taper = profile.floorWidth.value - profile.widthAtRoof.value;
+  if (taper > 40 && halfWidth < profile.floorWidth.value / 2 - 1) {
+    return 'the side trim leans in as it rises, so the bay is narrower up there.';
+  }
+
+  return 'the bay is not that wide.';
+}
+
+/**
+ * Is this box properly supported on the floor, or is it perched on the third-row rails?
+ *
+ * The distinction the rails force: two parallel rails of the same height are not a
+ * problem at all — a crate straddling both sits dead level, just raised by the height
+ * of the rail. It is a crate caught on *one* rail, or bridging rails of different
+ * heights, that rocks on a corner. Warning about both cases equally would train you to
+ * ignore the warning.
+ */
+function checkFloorSupport(
+  box: PlacedBox,
+  aabb: Aabb,
+  profile: VehicleProfile,
+): FitIssue | undefined {
+  const obstructions = obstructionBoxes(profile);
+
+  // Which obstructions is this box actually bearing on? Its footprint has to overlap
+  // theirs, and its underside has to be at or below their top — a box resting on a
+  // rail sits exactly level with it, so `overlaps` is the wrong tool here: its
+  // tolerance exists to stop touching faces counting, which is precisely this case.
+  const bearing = obstructions.filter(
+    (o) => footprintOverlaps(aabb, o) && aabb.minZ <= o.maxZ + CONTACT_TOLERANCE,
+  );
+  if (bearing.length === 0) return undefined;
+
+  const heights = [...new Set(bearing.map((o) => Math.round(o.maxZ)))];
+
+  if (bearing.length >= 2 && heights.length === 1) {
+    return {
+      boxId: box.id,
+      kind: 'on-obstruction',
+      severity: 'warning',
+      message:
+        `${box.label} is straddling ${bearing.length} rails of the same height, so it sits level — ` +
+        `but ${heights[0]} mm up, which is ${heights[0]} mm less headroom under the roof.`,
+    };
+  }
+
+  const names = bearing.map((o) => o.label.toLowerCase()).join(' and ');
+  return {
+    boxId: box.id,
+    kind: 'on-obstruction',
+    severity: 'warning',
+    message:
+      heights.length > 1
+        ? `${box.label} is bridging ${names}, which are different heights, so it will rock. ` +
+          `Pack the low side out.`
+        : `${box.label} is perched on the ${names} with nothing under its other side, so it will rock. ` +
+          `Slide it clear, or across so it catches both rails.`,
+  };
 }
 
 /** Issues grouped by box, for tinting meshes and for the inspector. */
