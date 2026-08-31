@@ -1,0 +1,47 @@
+{
+  "name": "hyperlocal",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Private place notes and reviews for friends and family, on atproto Spaces",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite",
+    "dev:proxy": "tsx place-proxy/server.ts",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "test:e2e": "playwright test",
+    "seed": "tsx scripts/seed.ts",
+    "spike": "tsx scripts/spike.ts",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:e2e"
+  },
+  "dependencies": {
+    "@atproto/jwk-jose": "^0.2.4",
+    "@atproto/lex-client": "0.0.0-spaces-alpha-20260818163953",
+    "@atproto/oauth-client-browser": "0.0.0-spaces-alpha-20260818163953",
+    "@atproto/space": "0.0.0-spaces-alpha-20260818163953",
+    "maplibre-gl": "^5.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^26.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "@atproto/lex-schema": "0.0.0-spaces-alpha-20260818163953",
+    "@atproto/lex-client": "0.0.0-spaces-alpha-20260818163953",
+    "@atproto/lex-builder": "0.0.0-spaces-alpha-20260818163953",
+    "@atproto/lex-document": "0.0.0-spaces-alpha-20260818163953",
+    "@atproto/lex-installer": "0.0.0-spaces-alpha-20260818163953",
+    "@atproto/lex-resolver": "0.0.0-spaces-alpha-20260818163953",
+    "@atproto/syntax": "0.0.0-spaces-alpha-20260818163953",
+    "@atproto/space": "0.0.0-spaces-alpha-20260818163953",
+    "@atproto/oauth-client-browser": "0.0.0-spaces-alpha-20260818163953"
+  }
+}
