@@ -1,5 +1,5 @@
 import type { PlacedBox } from '../model/types.js';
-import { aabbOf, footprintOverlaps } from './boxes.js';
+import { aabbOf } from './boxes.js';
 import { supportOf, type SpecLookup } from './stacking.js';
 
 /**

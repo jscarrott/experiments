@@ -7,11 +7,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "build:artifact": "tsc --noEmit && vite build --mode artifact",
+    "build:artifact": "tsc --noEmit && vite build --mode artifact && node scripts/build-artifact.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "verify:artifact": "node scripts/verify-artifact.mjs",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:e2e"
   },
   "dependencies": {
     "three": "^0.180.0"
