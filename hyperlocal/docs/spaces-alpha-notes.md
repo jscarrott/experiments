@@ -102,3 +102,34 @@ run needs an account on a spaces-capable PDS — the hosted sandbox is invite-ga
 `bsky.network/account`, and the self-hosted route needs Docker, which this development
 container has no daemon for. `scripts/spike.ts` performs the end-to-end check and is
 the first thing to run once accounts exist.
+
+## Scopes
+
+Bulletin asks for `include:my.bulletin.permissions` — a `"type": "permission-set"`
+lexicon it publishes, which gives a friendlier consent screen. That only works once the
+lexicon is resolvable, which means owning the domain the NSID is built from and
+publishing the schemas as records. With a placeholder namespace it is not an option.
+
+The raw scope syntax works instead, and needs nothing published:
+
+```
+atproto
+space?type=xyz.hyperlocal.space&authority=*&skey=self
+     &collection=xyz.hyperlocal.note
+     &action=read&action=create&action=update&action=delete&manage=create
+```
+
+Checked against `@atproto/oauth-scopes` at the spaces-alpha version by round-tripping it
+through `ScopePermissions`: it grants read, create, update and delete on the note
+collection and `manage=create` for making the space, and correctly refuses
+`app.bsky.feed.post`, so it cannot touch anything else in the account.
+
+`authority=*` is the part that matters for a shared space — a member is reading a space
+anchored on the *owner's* DID, not their own, and the parameter defaults to `self`.
+Space actions worth knowing: `read` is collection-independent and implies `read_self`;
+`manage` is separate from `action` and covers creating, updating and deleting the space
+itself.
+
+Switching to a permission set later is a scope-string change plus publishing the
+lexicons, and the permission set is already written for that:
+`lexicons/xyz/hyperlocal/permissions.json`.

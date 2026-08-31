@@ -1,0 +1,30 @@
+# fly deploy --config place-proxy/fly.toml --dockerfile place-proxy/Dockerfile
+app = "hyperlocal-places"
+primary_region = "lhr"
+
+[build]
+
+[env]
+  PORT = "8787"
+  CACHE_PATH = "/data/places.sqlite"
+  # Cache OSM lookups for a month. Shopfronts do change, but not on a timescale where
+  # a stale name is worse than an extra query against a volunteer-run service.
+  CACHE_TTL_MS = "2592000000"
+
+[[mounts]]
+  source = "hyperlocal_places"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # The cache is on a volume, so scaling to zero between uses costs a cold start and
+  # nothing else.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"

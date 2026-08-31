@@ -4,3 +4,4 @@ test-results/
 playwright-report/
 *.log
 place-proxy/*.sqlite
+public/client-metadata.json
