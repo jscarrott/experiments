@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildNote, countGraphemes, toNote, validateNote } from '../shared/note.js';
+import { NOTE_COLLECTION } from '../shared/nsid.js';
 import { cafe } from './helpers.js';
 
 const good = {
-  $type: 'xyz.hyperlocal.note',
+  $type: NOTE_COLLECTION,
   text: 'Good coffee, bad food',
   location: { latitude: '51.5074', longitude: '-0.1278' },
   createdAt: '2026-08-31T10:00:00.000Z',
@@ -85,7 +86,7 @@ test('buildNote produces a record that validates', () => {
   });
   assert.ok(validateNote(record).ok);
   assert.equal(record.location.latitude, '51.5074');
-  assert.equal(record.$type, 'xyz.hyperlocal.note');
+  assert.equal(record.$type, NOTE_COLLECTION);
 });
 
 test('buildNote omits empty optionals rather than writing nulls', () => {
@@ -96,7 +97,7 @@ test('buildNote omits empty optionals rather than writing nulls', () => {
 });
 
 test('toNote parses coordinates once and derives the place key', () => {
-  const note = toNote('at://did:plc:a/xyz.hyperlocal.note/1', 'bafy', 'did:plc:a', {
+  const note = toNote(`at://did:plc:a/${NOTE_COLLECTION}/1`, 'bafy', 'did:plc:a', {
     ...good,
     place: cafe,
   });

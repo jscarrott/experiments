@@ -1,4 +1,5 @@
 import { buildNote, toNote } from '../shared/note.js';
+import { NOTE_COLLECTION } from '../shared/nsid.js';
 import type { Note, NoteRecord } from '../shared/types.js';
 import type { NoteSource } from './source.js';
 
@@ -62,7 +63,7 @@ function seedNotes(): Note[] {
       place: seed.place,
       createdAt: new Date(now - seed.daysAgo * 86_400_000),
     });
-    const note = toNote(`at://${seed.author}/xyz.hyperlocal.note/demo${i}`, `demo${i}`, seed.author, record);
+    const note = toNote(`at://${seed.author}/${NOTE_COLLECTION}/demo${i}`, `demo${i}`, seed.author, record);
     if (note) notes.push(note);
   });
   return notes;
@@ -99,7 +100,7 @@ export class DemoSource implements NoteSource {
 
   async create(record: NoteRecord): Promise<Note> {
     const rkey = `local${Date.now().toString(36)}`;
-    const note = toNote(`at://${this.viewer}/xyz.hyperlocal.note/${rkey}`, rkey, this.viewer, record);
+    const note = toNote(`at://${this.viewer}/${NOTE_COLLECTION}/${rkey}`, rkey, this.viewer, record);
     if (!note) throw new Error('note did not validate');
     this.write([...((await this.load()) ?? []), note]);
     return note;

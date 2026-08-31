@@ -16,7 +16,13 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: 'npx vite preview --port 4173 --strictPort',
+    // Built here rather than reusing dist/, with the OSM proxy URL configured, because
+    // that URL is a build-time constant: an unconfigured production build skips the
+    // lookup entirely, so the stubbed-proxy tests would have nothing to intercept.
+    // A separate outDir keeps the real dist/ free of this test-only value.
+    command:
+      'npx vite build --outDir dist-e2e && npx vite preview --outDir dist-e2e --port 4173 --strictPort',
+    env: { VITE_PLACES_URL: 'http://127.0.0.1:8787' },
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: true,
     timeout: 60_000,

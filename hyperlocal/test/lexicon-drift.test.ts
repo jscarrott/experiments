@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { LIMITS, OSM_TYPES } from '../shared/note.js';
-import { NOTE_COLLECTION, SPACE_TYPE, spaceAuthority, spaceRef } from '../shared/nsid.js';
+import { NAMESPACE, NOTE_COLLECTION, SPACE_TYPE, spaceAuthority, spaceRef } from '../shared/nsid.js';
 
 // Resolved against this file, not the working directory, so the test passes wherever
 // it is run from.
-const lexiconDir = fileURLToPath(new URL('../lexicons/xyz/hyperlocal/', import.meta.url));
+const lexiconDir = fileURLToPath(
+  new URL(`../lexicons/${NAMESPACE.split('.').join('/')}/`, import.meta.url),
+);
 const read = (name: string) =>
   JSON.parse(readFileSync(`${lexiconDir}${name}.json`, 'utf8'));
 
@@ -50,7 +52,7 @@ test('the space lexicon declares the note collection and a single space per owne
 
 test('space refs round-trip through their authority', () => {
   const ref = spaceRef('did:plc:owner');
-  assert.equal(ref, 'at://did:plc:owner/space/xyz.hyperlocal.space/self');
+  assert.equal(ref, `at://did:plc:owner/space/${SPACE_TYPE}/self`);
   assert.equal(spaceAuthority(ref), 'did:plc:owner');
-  assert.equal(spaceAuthority('at://did:plc:x/xyz.hyperlocal.note/abc'), null);
+  assert.equal(spaceAuthority(`at://did:plc:x/${NOTE_COLLECTION}/abc`), null);
 });

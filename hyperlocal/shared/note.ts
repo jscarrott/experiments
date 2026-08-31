@@ -3,7 +3,7 @@ import { formatCoord, parseLatitude, parseLongitude } from './geo.js';
 import type { GeoLocation, Note, NoteRecord, OsmPlace } from './types.js';
 
 /**
- * The constraints from `lexicons/xyz/hyperlocal/note.json`, restated so validation
+ * The constraints from `lexicons/com/jscarrott/hyperlocal/note.json`, restated so validation
  * runs with no dependencies at all — `shared/` is imported by the browser, the proxy
  * and the tests, and pinning an alpha-tagged schema package into that path would mean
  * core validation breaking every time the Spaces alpha moves.

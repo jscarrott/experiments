@@ -1,10 +1,10 @@
 // Every name derived from the namespace lives here, so pointing this project at a
 // domain you actually own is a one-line change plus renaming the lexicon directory.
 //
-// atproto NSIDs are reversed domain names, and lexicon resolution is moving toward a
-// `_lexicon` DNS TXT record on that domain — so `xyz.hyperlocal` is a placeholder that
-// works fine while nothing else on the network needs to resolve these schemas.
-export const NAMESPACE = 'xyz.hyperlocal';
+// atproto NSIDs are reversed domain names. The authority for an NSID is everything
+// before its final segment, reversed — so `com.jscarrott.hyperlocal.note` resolves via
+// `_lexicon.hyperlocal.jscarrott.com`, not via the bare apex.
+export const NAMESPACE = 'com.jscarrott.hyperlocal';
 
 export const NOTE_COLLECTION = `${NAMESPACE}.note` as const;
 export const SPACE_TYPE = `${NAMESPACE}.space` as const;

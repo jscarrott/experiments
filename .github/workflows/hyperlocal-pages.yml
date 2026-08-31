@@ -1,0 +1,74 @@
+# Publishes hyperlocal/ to https://hyperlocal.jscarrott.com via GitHub Pages.
+#
+# The apex jscarrott.com is served by GitHub Pages from a different repository; a repo
+# gets one Pages site, and different repos can serve different subdomains of the same
+# domain, so this does not collide with the existing site.
+name: Deploy Hyperlocal
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'hyperlocal/**'
+      - '.github/workflows/hyperlocal-pages.yml'
+  # So the site can be published from a branch before this is merged.
+  workflow_dispatch:
+
+# Two deploys racing would fight over one Pages site; queue instead. In-progress runs are
+# left alone rather than cancelled, because cancelling mid-deploy can leave Pages part-way.
+concurrency:
+  group: hyperlocal-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hyperlocal
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hyperlocal/package-lock.json
+
+      - run: npm ci
+
+      # A gate, not a formality: a broken build published to the family's only copy of
+      # the app is worse than no deploy. End-to-end tests are left out deliberately —
+      # they need a browser download on every run, which is disproportionate here.
+      - run: npm run typecheck
+      - run: npm test
+
+      # The production OAuth client_id IS this URL, and the scope inside the document
+      # must match what the app requests or the authorization server refuses. Both come
+      # from shared/scope.ts, so generating it here keeps them in step.
+      - name: Generate OAuth client metadata
+        run: PUBLIC_URL=https://hyperlocal.jscarrott.com npm run client-metadata
+
+      - name: Build
+        # Unset means "no OSM proxy": the app skips the lookup and drops plain pins.
+        # Set the repository variable once the proxy is hosted somewhere over HTTPS.
+        env:
+          VITE_PLACES_URL: ${{ vars.HYPERLOCAL_PLACES_URL }}
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: hyperlocal/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
