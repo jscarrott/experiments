@@ -5,10 +5,11 @@ Three pieces. Only one of them costs money, and only one of them is difficult.
 | Piece | Where | Cost | Without it |
 |---|---|---|---|
 | Web app | GitHub Pages | £0 | Nothing works |
-| PDS | An **amd64** VM | ~£5/month | Nobody can sign in; demo mode only |
+| PDS | Your desktop over Tailscale, or an **amd64** VM | £0, or ~£5/month | Nobody can sign in; demo mode only |
 | OSM place proxy | Fly.io, or a Cloudflare Worker | £0–2/month | Every note gets a plain pin |
 
-Plus the domain you already own. Realistically **~£70/year**, nearly all of it the VM.
+Plus the domain you already own. **£0 to start** if the PDS runs on your desktop over
+Tailscale; ~£70/year once it moves to a VM, nearly all of which is the VM.
 
 Do them in this order. Each stage is useful on its own, and each one is verifiable before
 you start the next.
@@ -57,7 +58,12 @@ there is nothing to sign in to yet.
 
 ## Stage 2 — the PDS (the real work)
 
-This is the only piece that costs money and the only one that can lose data.
+The only piece that can lose data, and the only one that might cost money. Two ways to run
+it: **Option A** on a desktop you already own, over Tailscale, for £0 — the cheaper way to
+start and the way to find out whether any of this works. **Option B** on a VM, when you
+want it up whether or not the desktop is.
+
+Either way, read the two constraints first: they apply to both.
 
 ### It must be amd64
 
@@ -70,8 +76,135 @@ builds for ARM — nobody has built the alpha for it. Building your own arm64 im
 `permissioned-data` branch is possible but means rebuilding on every alpha change, which
 is not a thing to sign up for.
 
+An ordinary Intel or AMD desktop is amd64, so it runs the image natively — this constraint
+bites small ARM boards and cloud ARM instances, not desktops.
+
+### Never let it auto-update
+
+The official compose file ships a **watchtower** service that pulls new images at midnight.
+On alpha software pinned by digest that is precisely the wrong behaviour — it would replace
+a working PDS with a breaking change while you sleep. **Delete the watchtower service.**
+The whole point of pinning is that upgrades happen when you decide.
+
+---
+
+## Stage 2, Option A — your desktop, over Tailscale (start here)
+
+Free, and it needs **no changes to the app**. Tailscale gives the PDS a stable hostname
+with a genuine TLS certificate, which is all the app ever needed: `resolvePds()` finds the
+endpoint through `plc.directory`, handles resolve through DNS, and OAuth gets the HTTPS
+authorization server it requires.
+
+### Two hostnames, doing different jobs
+
+This is the bit that makes it work, and the bit that is easy to get wrong.
+
+- **The PDS lives at `<machine>.<tailnet>.ts.net`** — stable, free, and Tailscale issues
+  the certificate.
+- **Handles come from `jscarrott.com`** — `mum.jscarrott.com`, not
+  `mum.<machine>.ts.net`.
+
+They have to be separated because **`ts.net` has no wildcard certificates and no wildcard
+DNS**. A PDS issues handles as subdomains of its own hostname by default, so left alone
+every family handle would be unreachable. Setting `PDS_SERVICE_HANDLE_DOMAINS` moves them
+to a domain you control, where handle resolution is a DNS TXT record rather than something
+the PDS has to serve — so no wildcard certificate is needed anywhere.
+
+### Let Tailscale terminate TLS
+
+Run the PDS on loopback with **no Caddy**, and put Tailscale in front:
+
+```bash
+tailscale serve --bg --https=443 http://127.0.0.1:3000
+```
+
+Two services both trying to obtain a certificate for the same name is the standard way to
+lose an afternoon. Tailscale wins because it is the one that can.
+
+**Serve, not Funnel.** Serve keeps the PDS reachable only from your tailnet, so family
+install Tailscale and get invited to it. That is one extra install in exchange for the PDS
+never being exposed to the internet at all — a good trade for alpha software holding your
+family's notes, and a second lock on top of the space's member list. If that install is a
+dealbreaker, `tailscale funnel` gives the same hostname and certificate but publicly
+reachable; it is limited to ports 443/8443/10000 and has to be enabled in the tailnet ACL.
+
+### Compose
+
+Start from the official `bluesky-social/pds` setup, then cut it down: **no caddy, no
+watchtower**, and bind to loopback rather than host networking.
+
+```yaml
+services:
+  pds:
+    container_name: pds
+    image: ghcr.io/bluesky-social/atproto:pds-spaces-alpha@sha256:813a08fe81630bc2eadcf77c03552f0b22fd7c3a23f746e926ccc7cffc49c876
+    restart: unless-stopped
+    # Loopback only: Tailscale is the only thing that should be able to reach it.
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - type: bind
+        source: /pds
+        target: /pds
+    env_file:
+      - /pds/pds.env
+```
+
+The values in `pds.env` that differ from the official sample:
+
+```
+PDS_HOSTNAME=<machine>.<tailnet>.ts.net
+PDS_SERVICE_HANDLE_DOMAINS=.jscarrott.com
+```
+
+`PDS_HOSTNAME` must be right **before you create a single account** — it is written into
+every DID document and cannot be changed casually afterwards. Everything else (the JWT
+secret, admin password, PLC rotation key, the `PDS_BSKY_*` and `PDS_REPORT_*` defaults)
+comes from the official `sample.env`; generate the secrets with its installer rather than
+by hand.
+
+### Accounts, and why the order matters
+
+You cannot write the `_atproto` TXT record until the DID exists, and the DID does not exist
+until the account does. So:
+
+1. `pdsadmin account create` — take the default handle under `PDS_HOSTNAME`.
+2. Note the DID it prints.
+3. At Hover, add `_atproto.mum.jscarrott.com` TXT → `did=did:plc:…`.
+4. Update the account's handle to `mum.jscarrott.com`.
+
+Doing it in the other order just fails, confusingly.
+
+### The four things to be honest about
+
+1. **The desktop must be awake.** Asleep, nobody can read their notes — including you,
+   since your own repo lives on it. Turn off sleep, or accept the outage.
+2. **It is the only copy.** The alpha has no backups. Copy `/pds` to another disk nightly,
+   starting before anyone writes anything they would miss.
+3. **The hostname is baked into every DID.** Moving to `pds.jscarrott.com` later means a
+   signed PLC update per account with the rotation key from `pds.env`, or recreating the
+   accounts. `ts.net` names are stable and free, so staying there permanently is a
+   perfectly reasonable choice, not a compromise.
+4. **Family need Tailscale** under Serve. If that is a problem, use Funnel and accept the
+   public exposure.
+
+> **Not verified.** No part of this has been run — the dev container has no Docker daemon.
+> `PDS_SERVICE_HANDLE_DOMAINS` is read from `packages/pds/src/config/env.ts` on the
+> `permissioned-data` branch, and the `ts.net` wildcard limitation from Tailscale's own
+> issue tracker, but the assembly is untested. Read the container's startup logs rather
+> than assuming a silent failure is normal.
+
+---
+
+## Stage 2, Option B — a VM (when you want it always on)
+
 **Get an x86_64 VM.** Hetzner CX22 (~€4.50–6/month; they raised cloud prices in June 2026,
 so check current) is ample — 2 vCPU and 4 GB is far more than a family needs.
+
+Everything from Option A applies except the exposure: here the PDS is public, so it uses
+its own Caddy and real DNS instead of Tailscale, and handles can live under
+`pds.jscarrott.com` with a wildcard record rather than needing
+`PDS_SERVICE_HANDLE_DOMAINS`.
 
 ### DNS
 
@@ -202,7 +335,13 @@ Nothing here depends on the alpha moving forward.
 |---|---|
 | Domain | already owned (~£10/year) |
 | App on GitHub Pages | £0 |
-| PDS on an amd64 VM | ~£4.50–6/month |
-| Backups | £0–1/month |
+| PDS on your desktop over Tailscale | £0 |
+| PDS on an amd64 VM, later | ~£4.50–6/month |
+| Backups | £0 to another disk, £0–1/month to object storage |
 | OSM proxy | £0 as a Worker, ~£2/month on Fly |
-| **Total** | **~£60–90/year** |
+| **Total, starting on the desktop** | **£0** |
+| **Total, once it moves to a VM** | **~£60–90/year** |
+
+Starting on the desktop is not just cheaper, it is the faster way to find out whether the
+alpha does what it claims. Move to a VM when the answer is yes and the uptime starts to
+annoy you.
