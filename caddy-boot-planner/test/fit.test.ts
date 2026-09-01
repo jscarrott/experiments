@@ -216,3 +216,17 @@ test('the too-wide message does still blame the arches when they genuinely intru
   assert.ok(wide);
   assert.match(wide.message, /wheel arches/);
 });
+
+test('a box taller than the roof is reported as too tall, not as too wide', () => {
+  // Above the roof line the bay has no width, so a naive width check reports an
+  // over-tall box as "too wide, 0 mm available" — technically true, actively
+  // unhelpful, and it hides the actual problem.
+  const lookup = makeLookup([spec('tower', 400, 400, 1400)]);
+  const issues = checkFit([place('a', 'tower', 0, 600, 0)], profile, lookup);
+
+  assert.ok(issues.some((i) => i.kind === 'too-tall'), 'it is too tall');
+  assert.ok(
+    !issues.some((i) => i.kind === 'too-wide'),
+    'a 400 mm box is not too wide for a 1552 mm bay at any height it occupies',
+  );
+});
