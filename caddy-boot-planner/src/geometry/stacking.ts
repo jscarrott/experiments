@@ -1,5 +1,6 @@
-import type { Aabb, BoxSpec, PlacedBox } from '../model/types.js';
+import type { Aabb, BoxSpec, PlacedBox, VehicleProfile } from '../model/types.js';
 import { aabbOf, footprintArea, footprintOverlapArea } from './boxes.js';
+import { halfWidthAt } from './shell.js';
 
 /**
  * Stacking.
@@ -25,8 +26,15 @@ export interface Stack {
 const CONTACT_TOLERANCE = 5;
 /** A box supported on less than this fraction of its own footprint is overhanging. */
 const MIN_SUPPORT_FRACTION = 0.7;
-/** Height-to-base ratio above which a friction stack is a topple risk. */
+/** Height-to-base ratio above which something is a topple risk. */
 const TOPPLE_RATIO = 2.2;
+/**
+ * How close something has to be before it counts as holding a tall item up, mm.
+ * A slab with a wall this near can only lean; it cannot go over.
+ */
+const BRACE_GAP = 80;
+/** A neighbour must reach this fraction of a tall item's height to brace it. */
+const BRACE_HEIGHT_FRACTION = 0.5;
 
 /**
  * Which box, if any, is this one resting on? Returns the highest box directly
@@ -115,8 +123,20 @@ export interface StackIssue {
   message: string;
 }
 
-/** Overhang, topple and mixed-system checks across every stack. */
-export function checkStacks(boxes: PlacedBox[], lookup: SpecLookup): StackIssue[] {
+/**
+ * Overhang, topple and mixed-system checks.
+ *
+ * `profile` and `heldBoxIds` are what let the single-item topple check tell the
+ * difference between a table stood sensibly against the side and the same table
+ * standing in open floor. Without them it would flag both, and a check that fires on
+ * the correct answer is one you learn to ignore.
+ */
+export function checkStacks(
+  boxes: PlacedBox[],
+  lookup: SpecLookup,
+  profile?: VehicleProfile,
+  heldBoxIds: Set<string> = new Set(),
+): StackIssue[] {
   const issues: StackIssue[] = [];
   const byId = new Map(boxes.map((b) => [b.id, b]));
 
@@ -176,7 +196,106 @@ export function checkStacks(boxes: PlacedBox[], lookup: SpecLookup): StackIssue[
     }
   }
 
+  issues.push(...checkUprightItems(boxes, lookup, profile, heldBoxIds));
   return issues;
+}
+
+/**
+ * A single item standing on a narrow base — a folded table on its edge, a crate on
+ * its end — with nothing holding it up.
+ *
+ * This exists because tipping items on end is exactly the sort of space-saving move
+ * that quietly turns a tidy load into something that falls over on the first
+ * roundabout, and the stack check above never sees it: it only looks at stacks of two
+ * or more boxes.
+ */
+function checkUprightItems(
+  boxes: PlacedBox[],
+  lookup: SpecLookup,
+  profile: VehicleProfile | undefined,
+  heldBoxIds: Set<string>,
+): StackIssue[] {
+  const issues: StackIssue[] = [];
+
+  for (const box of boxes) {
+    // Only items standing on their own. Anything in a stack is the stack check's job.
+    if (supportOf(box, boxes, lookup)) continue;
+    if (boxes.some((other) => other.id !== box.id && supportOf(other, boxes, lookup)?.id === box.id)) {
+      continue;
+    }
+
+    const aabb = aabbOf(lookup(box.specId), box);
+    const height = aabb.maxZ - aabb.minZ;
+    const base = Math.min(aabb.maxX - aabb.minX, aabb.maxY - aabb.minY);
+    if (base <= 0 || height / base <= TOPPLE_RATIO) continue;
+
+    if (heldBoxIds.has(box.id)) continue;
+    if (bracedBy(box, aabb, boxes, lookup, profile)) continue;
+
+    issues.push({
+      boxId: box.id,
+      kind: 'topple-risk',
+      message:
+        `${box.label} is standing ${Math.round(height)} mm tall on a ${Math.round(base)} mm base with ` +
+        `nothing holding it up, so it will go over. Stand it against a side or the seat backs, ` +
+        `wedge it beside something of similar height, or put a strap on it.`,
+    });
+  }
+
+  return issues;
+}
+
+/** Is anything close enough to stop this item falling over? */
+function bracedBy(
+  box: PlacedBox,
+  aabb: Aabb,
+  boxes: PlacedBox[],
+  lookup: SpecLookup,
+  profile: VehicleProfile | undefined,
+): boolean {
+  if (profile) {
+    // A side wall, measured at mid-height where the item would lean against it.
+    const midZ = (aabb.minZ + aabb.maxZ) / 2;
+    const midY = (aabb.minY + aabb.maxY) / 2;
+    const wallHalf = halfWidthAt(profile, midZ, midY);
+    if (wallHalf > 0) {
+      if (aabb.maxX >= wallHalf - BRACE_GAP) return true;
+      if (aabb.minX <= -wallHalf + BRACE_GAP) return true;
+    }
+
+    // The second-row seat backs, and the closed tailgate.
+    if (aabb.minY <= BRACE_GAP) return true;
+    if (aabb.maxY >= profile.floorLength.value - BRACE_GAP) return true;
+  }
+
+  // A neighbour tall enough to lean on, close enough to reach.
+  for (const other of boxes) {
+    if (other.id === box.id) continue;
+    const otherAabb = aabbOf(lookup(other.specId), other);
+    if (otherAabb.maxZ < aabb.minZ + (aabb.maxZ - aabb.minZ) * BRACE_HEIGHT_FRACTION) continue;
+
+    const besideAcross =
+      overlaps1d(aabb.minY, aabb.maxY, otherAabb.minY, otherAabb.maxY) &&
+      gap1d(aabb.minX, aabb.maxX, otherAabb.minX, otherAabb.maxX) <= BRACE_GAP;
+    const besideAlong =
+      overlaps1d(aabb.minX, aabb.maxX, otherAabb.minX, otherAabb.maxX) &&
+      gap1d(aabb.minY, aabb.maxY, otherAabb.minY, otherAabb.maxY) <= BRACE_GAP;
+
+    if (besideAcross || besideAlong) return true;
+  }
+
+  return false;
+}
+
+function overlaps1d(aMin: number, aMax: number, bMin: number, bMax: number): boolean {
+  return aMin < bMax && aMax > bMin;
+}
+
+/** Clear distance between two ranges; 0 if they touch or overlap. */
+function gap1d(aMin: number, aMax: number, bMin: number, bMax: number): number {
+  if (aMax < bMin) return bMin - aMax;
+  if (bMax < aMin) return aMin - bMax;
+  return 0;
 }
 
 /** Bounding box of a whole stack, for the aperture check on rigid stacks. */

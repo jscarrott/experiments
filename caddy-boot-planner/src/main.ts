@@ -5,6 +5,7 @@ import './style.css';
 import { AppState, defaultLayout } from './state.js';
 import { loadCurrent, saveCurrent } from './model/layout.js';
 import { aabbOf } from './geometry/boxes.js';
+import type { PlacedBox } from './model/types.js';
 import { restingHeight } from './geometry/stacking.js';
 import { obstructionBoxes } from './geometry/shell.js';
 import { Viewer, type ViewName } from './scene/viewer.js';
@@ -107,7 +108,12 @@ function syncScene(): void {
 
     // Rebuild rather than rescale when the shape changed — geometry is cheap here
     // and it keeps the edge lines exactly on the box.
-    const signature = `${box.specId}:${box.rotation}:${JSON.stringify(box.overrides ?? {})}`;
+    // upAxis belongs here as much as rotation does: tipping a box changes its shape,
+    // and leaving it out would keep the old geometry on screen while every check used
+    // the new one — the 3D view quietly disagreeing with the warnings panel.
+    const signature =
+      `${box.specId}:${box.rotation}:${box.upAxis ?? 'height'}:` +
+      JSON.stringify(box.overrides ?? {});
     if (mesh && mesh.group.userData.signature !== signature) {
       disposeBoxMesh(mesh);
       boxMeshes.delete(box.id);
@@ -279,6 +285,18 @@ function findBoxId(object: THREE.Object3D): string | undefined {
   return undefined;
 }
 
+/** Cycle which face is down: flat, on its side, on its face, back to flat. */
+function nextUpAxis(current: PlacedBox['upAxis']): PlacedBox['upAxis'] {
+  switch (current ?? 'height') {
+    case 'height':
+      return 'width';
+    case 'width':
+      return 'depth';
+    default:
+      return 'height';
+  }
+}
+
 function snap(value: number): number {
   return Math.round(value / snapMm) * snapMm;
 }
@@ -302,6 +320,9 @@ window.addEventListener('keydown', (event: KeyboardEvent) => {
       break;
     case 'r':
       state.updateBox(box.id, { rotation: ((box.rotation + 90) % 360) as 0 | 90 | 180 | 270 });
+      break;
+    case 't':
+      state.updateBox(box.id, { upAxis: nextUpAxis(box.upAxis) });
       break;
     case 'd':
       state.duplicateBox(box.id);
@@ -336,7 +357,7 @@ viewer.setView('iso');
 
 function buildHelpOverlay(): HTMLElement {
   return el('div', { class: 'help' }, [
-    el('span', { text: 'Drag to move · R rotate · D duplicate · Del remove' }),
+    el('span', { text: 'Drag to move · R rotate · T tip on edge · D duplicate · Del remove' }),
     el('span', { text: 'Click two floor anchors to run a strap' }),
   ]);
 }

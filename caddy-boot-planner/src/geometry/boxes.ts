@@ -21,18 +21,55 @@ export function dimsOf(spec: BoxSpec, placed: PlacedBox): BoxDims {
 }
 
 /**
- * Footprint after rotation. Only right angles are allowed, so this is a swap
- * rather than a trigonometric mess.
+ * The box as it actually sits in the van: across, along and up.
+ *
+ * This is the single place orientation is resolved, and everything else in the
+ * codebase reaches geometry through `aabbOf`, so nothing else needs to know that
+ * boxes can be tipped at all.
+ *
+ * Two rotations compose, in this order:
+ *   1. `upAxis` picks which face is down — a tip about a horizontal axis.
+ *   2. `rotation` yaws it about the vertical axis.
+ *
+ * Only right angles are allowed, so both are swaps rather than a trigonometric mess.
  */
-export function footprintOf(spec: BoxSpec, placed: PlacedBox): { width: number; depth: number } {
-  const { width, depth } = dimsOf(spec, placed);
+export function effectiveDims(spec: BoxSpec, placed: PlacedBox): BoxDims {
+  const { width, depth, height } = dimsOf(spec, placed);
+
+  // Stand it on the chosen face first. The dimension named by upAxis becomes the
+  // vertical one, and the other two fall into place.
+  let across: number;
+  let along: number;
+  let up: number;
+
+  switch (placed.upAxis ?? 'height') {
+    case 'width':
+      // Tipped onto its side: what was the width is now the height.
+      [across, along, up] = [height, depth, width];
+      break;
+    case 'depth':
+      // Tipped onto its face: what was the depth is now the height.
+      [across, along, up] = [width, height, depth];
+      break;
+    default:
+      [across, along, up] = [width, depth, height];
+  }
+
+  // Then yaw, which only ever swaps the two horizontal dimensions.
   const turned = placed.rotation === 90 || placed.rotation === 270;
-  return turned ? { width: depth, depth: width } : { width, depth };
+  return turned
+    ? { width: along, depth: across, height: up }
+    : { width: across, depth: along, height: up };
+}
+
+/** Footprint as it sits — the horizontal half of `effectiveDims`. */
+export function footprintOf(spec: BoxSpec, placed: PlacedBox): { width: number; depth: number } {
+  const { width, depth } = effectiveDims(spec, placed);
+  return { width, depth };
 }
 
 export function aabbOf(spec: BoxSpec, placed: PlacedBox): Aabb {
-  const { width, depth } = footprintOf(spec, placed);
-  const { height } = dimsOf(spec, placed);
+  const { width, depth, height } = effectiveDims(spec, placed);
   return {
     minX: placed.x - width / 2,
     maxX: placed.x + width / 2,

@@ -1,5 +1,5 @@
 import type { PlacedBox } from '../model/types.js';
-import { dimsOf } from '../geometry/boxes.js';
+import { effectiveDims } from '../geometry/boxes.js';
 import type { AppState } from '../state.js';
 import { clear, el, kg, mm } from './dom.js';
 
@@ -27,7 +27,7 @@ export function buildInspector(state: AppState): HTMLElement {
     }
 
     const spec = state.lookup(box.specId);
-    const dims = dimsOf(spec, box);
+    const sitting = effectiveDims(spec, box);
     const weight = spec.emptyWeightKg.value + box.contentsKg;
     const issues = state.analysis.byBox.get(box.id) ?? [];
 
@@ -73,9 +73,32 @@ export function buildInspector(state: AppState): HTMLElement {
           onclick: () =>
             state.updateBox(box.id, { rotation: (((box.rotation + 90) % 360) as PlacedBox['rotation']) }),
         }),
-        el('span', { class: 'row__note', text: `${dims.width} × ${dims.depth} × ${dims.height} mm` }),
+        // The size as it currently sits, not the size on the box. This is the feedback
+        // that makes tipping legible — the numbers move when you stand it on edge.
+        el('span', {
+          class: 'row__note',
+          text: `${sitting.width} × ${sitting.depth} × ${sitting.height} mm as it sits`,
+        }),
+      ]),
+      el('h3', { class: 'panel__subheading', text: 'Standing on' }),
+      el('div', { class: 'row row--orient' }, [
+        orientButton('Base', 'height', box, state, 'Sitting the way it was designed to'),
+        orientButton('Side', 'width', box, state, 'Tipped onto its side — good for standing a flat thing against the trim'),
+        orientButton('Face', 'depth', box, state, 'Tipped onto its face — good for standing it against the seat backs'),
       ]),
     );
+
+    if ((box.upAxis ?? 'height') !== 'height') {
+      panel.append(
+        el('p', {
+          class: 'panel__hint',
+          text:
+            `Standing ${sitting.height} mm tall on a ${Math.min(sitting.width, sitting.depth)} mm ` +
+            `base. Lean it against a side, the seat backs, or something of similar height — ` +
+            `the checks will tell you if nothing is holding it.`,
+        }),
+      );
+    }
 
     // --- Weight and access -------------------------------------------------
     panel.append(
@@ -146,6 +169,24 @@ function setOverride(
   else overrides[key] = value;
   state.updateBox(box.id, {
     overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
+  });
+}
+
+/** One choice of which face is down. */
+function orientButton(
+  label: string,
+  axis: NonNullable<PlacedBox['upAxis']>,
+  box: PlacedBox,
+  state: AppState,
+  title: string,
+): HTMLElement {
+  const active = (box.upAxis ?? 'height') === axis;
+  return el('button', {
+    class: `button button--small ${active ? 'button--active' : ''}`,
+    type: 'button',
+    text: label,
+    title,
+    onclick: () => state.updateBox(box.id, { upAxis: axis }),
   });
 }
 
