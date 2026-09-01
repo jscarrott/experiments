@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { BoxSpec, PlacedBox } from '../model/types.js';
-import { dimsOf, footprintOf } from '../geometry/boxes.js';
+import { effectiveDims } from '../geometry/boxes.js';
 import { MM } from './shellMesh.js';
 import { THEME } from './theme.js';
 
@@ -21,8 +21,7 @@ export interface BoxMesh {
 }
 
 export function buildBoxMesh(placed: PlacedBox, spec: BoxSpec): BoxMesh {
-  const { width, depth } = footprintOf(spec, placed);
-  const { height } = dimsOf(spec, placed);
+  const { width, depth, height } = effectiveDims(spec, placed);
 
   const geometry = new THREE.BoxGeometry(width * MM, height * MM, depth * MM);
   const material = new THREE.MeshStandardMaterial({
@@ -51,7 +50,7 @@ export function buildBoxMesh(placed: PlacedBox, spec: BoxSpec): BoxMesh {
 }
 
 export function positionBoxGroup(group: THREE.Object3D, placed: PlacedBox, spec: BoxSpec): void {
-  const { height } = dimsOf(spec, placed);
+  const { height } = effectiveDims(spec, placed);
   group.position.set(placed.x * MM, (placed.z + height / 2) * MM, placed.y * MM);
 }
 

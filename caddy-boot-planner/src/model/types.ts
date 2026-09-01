@@ -169,6 +169,16 @@ export interface PlacedBox {
   z: number;
   /** Yaw about the vertical axis. Only right angles — these are boxes in a van. */
   rotation: 0 | 90 | 180 | 270;
+  /**
+   * Which of the box's own dimensions is currently pointing up — i.e. which face it
+   * is standing on. Defaults to `height`, meaning the box sits the way it was
+   * designed to. Tipping it onto `width` or `depth` is how a flat thing like a
+   * folded camp table gets stood on edge against a side, where it costs you its
+   * thickness instead of its footprint.
+   *
+   * Optional so that layouts saved before this existed still load.
+   */
+  upAxis?: 'height' | 'width' | 'depth';
   /** What you have put in it, kg. Added to the spec's empty weight. */
   contentsKg: number;
   /** Marked as needing frequent access — feeds the buried-box check. */

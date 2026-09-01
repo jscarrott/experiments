@@ -87,7 +87,7 @@ way, with per-box overrides in the inspector.
 ```bash
 npm install
 npm run dev          # dev server
-npm test             # unit tests over the pure geometry (57 tests)
+npm test             # unit tests over the pure geometry (69 tests)
 npm run test:e2e     # Playwright smoke tests
 npm run check        # typecheck + unit + build + e2e
 ```
@@ -123,8 +123,24 @@ disagree with the 3D view.
 ## Controls
 
 Drag a box to move it; it drops onto whatever is beneath, including the third-row
-rails. `R` rotates 90°, `D` duplicates, `Delete` removes, arrow keys nudge by the snap
-increment (shift for ×5). Click two floor anchors to run a strap between them.
+rails. `R` yaws 90°, `T` tips it onto the next face, `D` duplicates, `Delete` removes,
+arrow keys nudge by the snap increment (shift for ×5). Click two floor anchors to run a
+strap between them.
+
+### Standing things on edge
+
+A folded camp table laid flat wastes 0.39 m² of a 1.7 m² floor on a 70 mm-thick object.
+The **Standing on** control tips any item onto a different face, so a slab can go on edge
+against the trim and cost you its thickness instead of its footprint.
+
+That comes with a check, because a 625 mm slab on a 70 mm base falls over on the first
+roundabout. It is flagged **only when nothing is holding it up** — a side wall, the seat
+backs, a neighbour of similar height, or a strap all count as bracing. Warning about the
+correct way to pack something is how you train someone to ignore warnings.
+
+One thing the tool catches here that you would not by eye: the side trim leans inwards as
+it rises, so a table that sits hard against the trim when laid flat fouls it by a few
+millimetres when stood up 625 mm tall. It has to come inboard slightly.
 
 ## What it deliberately doesn't do
 

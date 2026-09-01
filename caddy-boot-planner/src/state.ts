@@ -60,9 +60,10 @@ export class AppState {
     const { boxes, vehicle, straps, nets, unrestrainedWarnKg } = this.layout;
 
     const fit = checkFit(boxes, vehicle, this.lookup);
-    const stack = checkStacks(boxes, this.lookup);
     const stacks = findStacks(boxes, this.lookup);
 
+    // Restraint is resolved before the stack checks, because whether a tall item is
+    // about to fall over depends on whether anything is holding it.
     const strapResults = routeAll(straps, vehicle.anchors, boxes, this.lookup);
     const netResults = nets.map((net) => drapeNet(net, vehicle.anchors, boxes, this.lookup));
 
@@ -72,6 +73,13 @@ export class AppState {
       for (const id of result.heldBoxIds) netHeld.add(id);
       for (const id of result.bridgedBoxIds) netBridged.add(id);
     }
+
+    const held = new Set(netHeld);
+    for (const result of strapResults) {
+      for (const id of result.touchingBoxIds) held.add(id);
+    }
+
+    const stack = checkStacks(boxes, this.lookup, vehicle, held);
 
     const restraint = checkRestraint(
       boxes,
@@ -127,6 +135,7 @@ export class AppState {
       y: at?.y ?? this.layout.vehicle.floorLength.value / 2,
       z: at?.z ?? 0,
       rotation: 0,
+      upAxis: 'height',
       contentsKg: 0,
       needOften: false,
     };

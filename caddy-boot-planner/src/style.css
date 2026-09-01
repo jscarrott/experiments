@@ -465,3 +465,13 @@ input[type="number"] { font-family: var(--mono); }
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+
+/* --- Orientation control ------------------------------------------------ */
+
+.row--orient { gap: 4px; margin-top: 4px; }
+
+.button--active {
+  border-color: var(--accent);
+  background: rgba(90, 209, 168, 0.14);
+  color: var(--accent);
+}
