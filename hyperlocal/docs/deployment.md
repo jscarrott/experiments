@@ -121,6 +121,25 @@ tailscale serve --bg --https=443 http://127.0.0.1:3000
 Two services both trying to obtain a certificate for the same name is the standard way to
 lose an afternoon. Tailscale wins because it is the one that can.
 
+**Three gates, and only the last one says so plainly.** Clear them in this order:
+
+1. **Certificate access needs root.** Run as an ordinary user, `tailscale serve` hangs
+   with no output at all and writes no config — the least helpful failure of the three.
+   `tailscale cert <name>` is the command that admits why: `Access denied: cert access
+   denied`. Grant it once with `sudo tailscale set --operator=$USER`.
+2. **HTTPS certificates must be enabled for the tailnet**, at **admin console → DNS →
+   HTTPS Certificates**. Until they are, `tailscale cert` returns `500 Internal Server
+   Error: your Tailscale account does not support getting TLS certs`. `tailscale status
+   --json` reports `CertDomains: null` while it is off — but it reports that for
+   unprovisioned certs too, so it confirms success rather than diagnosing failure.
+3. **Serve must be enabled for the tailnet**, separately from certificates. With the
+   operator set, `tailscale serve` stops hanging and prints the one error worth having —
+   `Serve is not enabled on your tailnet`, with a `login.tailscale.com/f/serve?node=…`
+   link that enables it for that specific node.
+
+Gates 2 and 3 are both admin-console toggles on the tailnet, so whoever owns the tailnet
+has to clear them; they are not something the machine can do for itself.
+
 **Serve, not Funnel.** Serve keeps the PDS reachable only from your tailnet, so family
 install Tailscale and get invited to it. That is one extra install in exchange for the PDS
 never being exposed to the internet at all — a good trade for alpha software holding your
@@ -155,6 +174,8 @@ The values in `pds.env` that differ from the official sample:
 ```
 PDS_HOSTNAME=<machine>.<tailnet>.ts.net
 PDS_SERVICE_HANDLE_DOMAINS=.jscarrott.com
+PDS_DPOP_SECRET=<64 hex characters>
+PDS_CRAWLERS=
 ```
 
 `PDS_HOSTNAME` must be right **before you create a single account** — it is written into
@@ -163,24 +184,51 @@ secret, admin password, PLC rotation key, the `PDS_BSKY_*` and `PDS_REPORT_*` de
 comes from the official `sample.env`; generate the secrets with its installer rather than
 by hand.
 
+`PDS_DPOP_SECRET` must be **exactly 64 characters** — `openssl rand --hex 32`, not
+`--hex 16`. Too short and the container exits at startup inside `new DpopManager`, on a
+zod `String must contain exactly 64 character(s)` whose only clue to which variable is at
+fault is `"path": ["dpopSecret"]`.
+
+`PDS_CRAWLERS` is deliberately **empty**, where the sample points it at
+`https://bsky.network` to request relay crawling. Under Serve the PDS is unreachable from
+the public internet, so a crawler could not follow the request anyway — and announcing a
+private family server to the public relay is the wrong default for this.
+
+**The data directory does not have to be `/pds`.** Only the path *inside* the container is
+fixed by `PDS_DATA_DIRECTORY`; the bind source is arbitrary, so `/home/<you>/pds` works and
+needs no `sudo` at any point. It is also the better choice on a single-user desktop: the
+image runs as its `node` user, which is uid 1000, so on a machine whose first user is also
+uid 1000 the data files come out owned by you and stay readable for backup without `sudo`.
+
 ### Accounts, and why the order matters
 
 You cannot write the `_atproto` TXT record until the DID exists, and the DID does not exist
 until the account does. So:
 
-1. `pdsadmin account create` — take the default handle under `PDS_HOSTNAME`.
+1. `pdsadmin account create` — the handle must end in one of `PDS_SERVICE_HANDLE_DOMAINS`,
+   so create it as `mum.jscarrott.com` directly. No DNS is needed yet: a handle under a
+   service domain is issued by the PDS itself rather than proved.
 2. Note the DID it prints.
-3. At Hover, add `_atproto.mum.jscarrott.com` TXT → `did=did:plc:…`.
-4. Update the account's handle to `mum.jscarrott.com`.
+3. At Hover, add `_atproto.mum.jscarrott.com` TXT → `did=did:plc:…`, so that everyone
+   *else* can resolve the handle to that DID.
 
 Doing it in the other order just fails, confusingly.
+
+**There is no intermediate handle under `PDS_HOSTNAME`.** Setting
+`PDS_SERVICE_HANDLE_DOMAINS=.jscarrott.com` replaces the default rather than adding to it —
+`describeServer` then reports `availableUserDomains: [".jscarrott.com"]` and nothing else,
+so asking for a handle under the `ts.net` name is rejected. Creating the account under its
+final name and adding DNS afterwards is the whole procedure.
 
 ### The four things to be honest about
 
 1. **The desktop must be awake.** Asleep, nobody can read their notes — including you,
    since your own repo lives on it. Turn off sleep, or accept the outage.
-2. **It is the only copy.** The alpha has no backups. Copy `/pds` to another disk nightly,
-   starting before anyone writes anything they would miss.
+2. **It is the only copy.** The alpha has no backups. Copy the data directory to another
+   disk nightly, starting before anyone writes anything they would miss. `pds.env` is the
+   part that cannot be regenerated: it holds the PLC rotation key, which is what proves
+   ownership of every DID the server issued. Lose the SQLite and you lose the notes; lose
+   the rotation key and you lose the ability to move the accounts anywhere, ever.
 3. **The hostname is baked into every DID.** Moving to `pds.jscarrott.com` later means a
    signed PLC update per account with the rotation key from `pds.env`, or recreating the
    accounts. `ts.net` names are stable and free, so staying there permanently is a
@@ -188,11 +236,23 @@ Doing it in the other order just fails, confusingly.
 4. **Family need Tailscale** under Serve. If that is a problem, use Funnel and accept the
    public exposure.
 
-> **Not verified.** No part of this has been run — the dev container has no Docker daemon.
-> `PDS_SERVICE_HANDLE_DOMAINS` is read from `packages/pds/src/config/env.ts` on the
-> `permissioned-data` branch, and the `ts.net` wildcard limitation from Tailscale's own
-> issue tracker, but the assembly is untested. Read the container's startup logs rather
-> than assuming a silent failure is normal.
+> **Partly verified**, on `john-desktop`, 1 September 2026. Run as far as a PDS serving on
+> loopback; not yet as far as an account.
+>
+> **Verified.** The pinned digest `813a08fe…` is still what the `pds-spaces-alpha` tag
+> resolves to, and it publishes an amd64 manifest and nothing else. The image is the
+> spaces build: all 20 `com.atproto.space` lexicons and the 9 `com.atproto.simplespace`
+> handlers ship in it, and `com.atproto.space.listSpaces` answers `401 AuthMissing` rather
+> than a `404`, so the routes are registered. There is **no env var to enable spaces** —
+> nothing in `config/env.js` matches `space` — so the feature is simply on. The compose
+> file above starts cleanly (`{"version":"0.5.29"}` on `/xrpc/_health`),
+> `PDS_SERVICE_HANDLE_DOMAINS` takes effect as `availableUserDomains`, and the admin
+> password authenticates against `com.atproto.server.createInviteCode`.
+>
+> **Still unverified.** Everything from TLS onwards: `tailscale serve`, account creation,
+> handle resolution through DNS, OAuth sign-in from the app, and `npm run spike`. Read the
+> container's startup logs rather than assuming a silent failure is normal — the one
+> failure met so far was a hard exit at startup, not a degraded service.
 
 ---
 
