@@ -5,7 +5,10 @@ Maxi Life (Typ 2K, 2010–2015), third row removed — and, more usefully, wheth
 straps and cargo net actually hold them.
 
 Built for attached-lid containers (Gatortote / Totebox style) and DeWalt TOUGHSYSTEM
-2.0 boxes.
+2.0 boxes, plus a Coleman Pro 25QT cool box and a folded camp table.
+
+The cool box is worth knowing about when you plan: at 445 mm it is the tallest single
+item in the catalogue, so it is usually what decides what can go on top of what.
 
 ## Why it isn't just a box-in-a-box calculator
 
@@ -84,7 +87,7 @@ way, with per-box overrides in the inspector.
 ```bash
 npm install
 npm run dev          # dev server
-npm test             # unit tests over the pure geometry (55 tests)
+npm test             # unit tests over the pure geometry (57 tests)
 npm run test:e2e     # Playwright smoke tests
 npm run check        # typecheck + unit + build + e2e
 ```

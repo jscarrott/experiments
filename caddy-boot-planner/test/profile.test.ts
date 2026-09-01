@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { CADDY_MAXI_LIFE_2K, VEHICLE_PRESETS } from '../src/model/vehicle.js';
 import { archBoxes, halfWidthAt, obstructionBoxes } from '../src/geometry/shell.js';
+import { checkFit } from '../src/geometry/fit.js';
 import { CATALOGUE } from '../src/model/catalogue.js';
 import type { VehicleProfile } from '../src/model/types.js';
 
@@ -99,19 +100,57 @@ test('arch solids are suppressed when the arches are flush with the trim', () =>
   assert.deepEqual(archBoxes(profile), [], 'no zero-width solids should be produced');
 });
 
-test('the catalogue box that most needs to fit actually does', () => {
-  // A 600x400 Euro crate is the whole reason for the tool. If the shipped profile
-  // cannot take one across the bay, something is badly wrong with the numbers.
-  const crate = CATALOGUE.find((s) => s.id === 'alc-600-340');
-  assert.ok(crate);
-  assert.ok(
-    crate.width.value < profile.floorWidth.value,
-    'a Euro crate should fit across the bay',
-  );
-  assert.ok(
-    crate.width.value <= profile.apertureWidth.value,
-    'and should go through the tailgate',
-  );
+test('every catalogue item can actually be loaded into the shipped bay', () => {
+  // Run each one through the app's own checks rather than restating the maths here,
+  // so this cannot drift from what the tool tells you on screen. If something is added
+  // to the catalogue that physically will not go in, this fails immediately instead of
+  // looking fine right up until you are stood at the tailgate with it.
+  const blocking = new Set([
+    'too-wide',
+    'too-tall',
+    'past-seats',
+    'past-tailgate',
+    'wont-fit-aperture',
+  ]);
+
+  for (const spec of CATALOGUE) {
+    const lookup = () => spec;
+    const box = {
+      id: 'x',
+      specId: spec.id,
+      label: spec.name,
+      x: 0,
+      // Centred fore-aft, so nothing fails merely for being badly placed.
+      y: profile.floorLength.value / 2,
+      z: 0,
+      rotation: 0 as const,
+      contentsKg: 0,
+      needOften: false,
+    };
+
+    const problems = checkFit([box], profile, lookup).filter((i) => blocking.has(i.kind));
+    assert.deepEqual(
+      problems.map((p) => `${p.kind}: ${p.message}`),
+      [],
+      `${spec.name} (${spec.width.value}×${spec.depth.value}×${spec.height.value}) should load`,
+    );
+  }
+});
+
+test('the two camping items are the shapes they are supposed to be', () => {
+  const cooler = CATALOGUE.find((s) => s.id === 'coleman-pro-25qt');
+  const table = CATALOGUE.find((s) => s.id === 'camp-table-folded');
+  assert.ok(cooler && table);
+
+  // The cool box being the tallest thing in the catalogue is load-bearing information:
+  // it is what limits stacking. If something taller is added, this should be revisited.
+  const tallest = Math.max(...CATALOGUE.map((s) => s.height.value));
+  assert.equal(cooler.height.value, tallest, 'the cool box should be the tallest item');
+
+  // The table is a flat slab, not a box — if that stops being true the "good stacking
+  // base" assumption in the catalogue comment stops being true with it.
+  assert.ok(table.height.value < 100, 'a folded table should be a slab');
+  assert.ok(table.width.value > table.height.value * 5);
 });
 
 test('every preset passes the same checks', () => {

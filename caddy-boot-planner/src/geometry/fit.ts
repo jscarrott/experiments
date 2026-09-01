@@ -65,7 +65,16 @@ export function checkFit(
     // over the height and length this box actually occupies, rather than against a
     // single headline width. Which of the three things below is doing the narrowing
     // depends on the vehicle, so the message has to work it out rather than assume.
-    const halfWidth = minHalfWidthOver(profile, aabb.minZ, aabb.maxZ, aabb.minY, aabb.maxY);
+    // Measure width only where the bay actually exists. Above the roof line there is
+    // no width at all, so an over-tall box would otherwise be reported as "too wide,
+    // you have 0 mm there" — true in a useless way, and it buries the real problem
+    // under a wrong one. The too-tall check below owns that case.
+    const zTop = Math.min(aabb.maxZ, profile.loadHeight.value);
+    const halfWidth =
+      aabb.minZ < profile.loadHeight.value
+        ? minHalfWidthOver(profile, aabb.minZ, zTop, aabb.minY, aabb.maxY)
+        : Infinity;
+
     const reach = Math.max(Math.abs(aabb.minX), Math.abs(aabb.maxX));
     if (reach > halfWidth + 1) {
       const overBy = Math.round((reach - halfWidth) * 2);

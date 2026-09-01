@@ -3,7 +3,7 @@ import { dim, type BoxSpec } from './types.js';
 /**
  * The box catalogue.
  *
- * Two systems, and they behave differently enough that the difference is modelled
+ * Two of the systems behave differently enough that the difference is modelled
  * rather than glossed over:
  *
  *  - Attached-lid containers (Gatortote / Totebox / Exporta and friends) are all
@@ -14,6 +14,9 @@ import { dim, type BoxSpec } from './types.js';
  *
  *  - DeWalt TOUGHSYSTEM 2.0 boxes share a 554×371 mm footprint and latch together,
  *    so a stack travels as one rigid unit.
+ *
+ * Everything else — the cool box, the folded camp table — is an ordinary object that
+ * sits where you put it and can have things stacked on it.
  *
  * Weights are approximate empty weights and are marked as such — they only affect
  * the total and centre-of-gravity readouts, not whether anything fits.
@@ -26,6 +29,7 @@ const TS2_GROUP = 'toughsystem-2';
 const ALC_COLOUR = '#4a7fb5';
 const ALC_SMALL_COLOUR = '#6f9fd0';
 const TS2_COLOUR = '#d8a51d';
+const CAMPING_COLOUR = '#5f9e6e';
 
 function alc600(id: string, height: number, capacityL: number, emptyKg: number): BoxSpec {
   return {
@@ -90,6 +94,45 @@ export const CATALOGUE: BoxSpec[] = [
   toughSystem('ts2-ds166', 'TOUGHSYSTEM 2.0 DS166 (shallow)', 178, 4.0),
   toughSystem('ts2-ds300', 'TOUGHSYSTEM 2.0 DS300 (medium)', 313, 5.5),
   toughSystem('ts2-ds400', 'TOUGHSYSTEM 2.0 DS400 (deep)', 400, 6.6),
+
+  // --- Camping gear ---------------------------------------------------------
+  {
+    id: 'coleman-pro-25qt',
+    system: 'Camping gear',
+    name: 'Coleman Pro 25QT cool box',
+    // Coleman's own spec, converted from 17.32 x 13.58 x 17.52 in. Retailers round
+    // this to 450 x 350 x 450, which is close enough not to matter but explains the
+    // discrepancy if you go looking.
+    width: dim(440, 'published', "Coleman spec. Some retailers round it to 450 mm."),
+    depth: dim(345, 'published', "Coleman spec. Some retailers round it to 350 mm."),
+    height: dim(
+      445,
+      'published',
+      'The tallest single item in this catalogue — taller than a DS400, so it is ' +
+        'usually what decides how much you can stack.',
+    ),
+    emptyWeightKg: dim(5, 'published', 'Empty. Add ice and contents in the inspector.'),
+    capacityL: 24,
+    stackMode: 'friction',
+    stackGroup: 'coleman-pro',
+    colour: CAMPING_COLOUR,
+  },
+  {
+    id: 'camp-table-folded',
+    system: 'Camping gear',
+    name: 'Camp table (folded)',
+    // Folded size of the Hi-Gear Storage Table at Go Outdoors, which matches the
+    // "folds in half like a suitcase" shape. Override these per box once you have
+    // measured your own — there are a dozen similar tables and they all differ.
+    width: dim(625, 'estimated', 'Folded. Based on the Hi-Gear Storage Table — measure yours.'),
+    depth: dim(625, 'estimated', 'Folded. Based on the Hi-Gear Storage Table — measure yours.'),
+    height: dim(70, 'estimated', 'Thickness of the folded slab.'),
+    emptyWeightKg: dim(4.5, 'estimated'),
+    // A rigid flat slab, so it makes a decent base to stack on.
+    stackMode: 'friction',
+    stackGroup: 'camp-table',
+    colour: '#7fb98c',
+  },
 
   // --- A generic box, for anything not in the list ---------------------------
   {
