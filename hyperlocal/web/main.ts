@@ -23,6 +23,7 @@ import {
   renderCompose,
   renderFilters,
   renderList,
+  renderMapKey,
   type ComposeDraft,
   type ViewerInfo,
 } from './ui.js';
@@ -416,6 +417,7 @@ async function start(): Promise<void> {
   store.update({ filter: filterFromQuery(window.location.search) });
   mustFind('#add-note').addEventListener('click', () => handlers.startCompose());
   wirePhoneLayout();
+  renderMapKey(mustFind('#map-key'));
 
   let auth: Awaited<ReturnType<typeof initAuth>> | null = null;
   try {

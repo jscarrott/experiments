@@ -108,7 +108,10 @@ body { background: var(--bg); color: var(--text); font: 13px/1.5 var(--font); ov
   padding: 2px 6px; border-radius: 999px; font-size: 11px;
   background: rgba(224, 163, 58, 0.15); color: #e0a33a;
 }
-.error {
+/* `:not([hidden])`, not a bare `.error`: any `display` here would outrank the `hidden`
+   attribute's `display: none` and leave an empty red strip under the toolbar for the
+   whole life of the page. Same trap as .scrim on a phone. */
+.error:not([hidden]) {
   margin: 0; padding: 8px 14px; background: rgba(224, 90, 90, 0.12); color: var(--error);
   display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
 }
@@ -118,6 +121,39 @@ body { background: var(--bg); color: var(--text); font: 13px/1.5 var(--font); ov
 .error__detail code { display: block; margin-top: 4px; overflow-wrap: anywhere; }
 
 .badge--warn { background: rgba(224, 90, 90, 0.16); color: var(--error); }
+
+.key__row { display: flex; align-items: center; gap: 8px; padding: 3px 0; color: var(--text-dim); }
+.key__dot {
+  width: 11px; height: 11px; border-radius: 50%; flex: none;
+  border: 2px solid #11131a; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* MapLibre's controls default to white cards. Against this shell they read as a
+   third-party widget dropped onto the page, which is most of why the bright basemap and
+   the dark chrome looked like two applications rather than one. Painting them with the
+   app's own tokens is the cheapest thing that ties the two together. */
+.viewport .maplibregl-ctrl-group {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+.viewport .maplibregl-ctrl-group button + button { border-top: 1px solid var(--line); }
+.viewport .maplibregl-ctrl-group button:hover { background: var(--bg); }
+/* The control glyphs are SVGs coloured for a white card, so they need inverting. */
+.viewport .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1) opacity(0.85); }
+.viewport .maplibregl-ctrl-attrib {
+  background: rgba(15, 17, 22, 0.82); color: var(--text-faint);
+  border-radius: var(--radius) 0 0 0;
+}
+.viewport .maplibregl-ctrl-attrib a { color: var(--text-dim); }
+.viewport .maplibregl-ctrl-attrib-button { filter: invert(1) opacity(0.85); }
+
+/* The basemap is bright and the shell is dark, and no amount of restyling changes that.
+   Recessing the map behind an inner shadow at least makes the seam look intended. */
+.viewport::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.5), inset 0 8px 18px -10px rgba(0, 0, 0, 0.8);
+}
 
 .compose { border-bottom: 1px solid var(--line); }
 

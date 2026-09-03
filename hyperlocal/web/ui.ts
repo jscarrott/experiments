@@ -1,4 +1,5 @@
 import { clear, fill, h, ratingLabel, relativeTime } from './dom.js';
+import { MAP_KEY } from './map-style.js';
 import type { AppState, DerivedState } from './state.js';
 import type { Note, PlaceCandidate, PlaceGroup } from '../shared/types.js';
 
@@ -94,6 +95,30 @@ export function renderFilters(
 }
 
 /** The right sidebar: either a place's notes, or everything currently in view. */
+/**
+ * The colour key for the map, rendered from the same constants the map paints with.
+ *
+ * It lives in the sidebar rather than floating over the map because the map is the one
+ * thing on a phone that should not be covered, and because a key is read once and then
+ * remembered.
+ */
+export function renderMapKey(root: HTMLElement): void {
+  fill(root,
+    h('div', { class: 'panel' },
+      h('h2', { class: 'panel__heading', text: 'Map key' }),
+      h('ul', { class: 'list list--plain key', 'data-testid': 'map-key' },
+        ...MAP_KEY.map((entry) =>
+          h('li', { class: 'key__row' },
+            h('span', { class: 'key__dot', style: `background:${entry.colour}` }),
+            h('span', { text: entry.label }),
+          ),
+        ),
+      ),
+      h('p', { class: 'muted', text: 'Bigger circles mean more notes about the same place.' }),
+    ),
+  );
+}
+
 export function renderList(
   root: HTMLElement,
   state: AppState,

@@ -4,6 +4,7 @@ import maplibregl, { type GeoJSONSource, type Map as MapLibreMap, type MapMouseE
 // positioned at all, so it lays itself across whatever follows the map in the document.
 // Nothing errors; it just looks broken in a way that reads as a layout bug.
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { NOTE_PIN, placeCircleColour } from './map-style.js';
 import type { Note, PlaceCandidate, PlaceGroup } from '../shared/types.js';
 
 /**
@@ -116,13 +117,7 @@ export class NoteMap {
       filter: ['==', ['get', 'kind'], 'place'],
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 9, 8, 18],
-        'circle-color': [
-          'case',
-          ['==', ['get', 'rated'], false], '#6b7285',
-          ['<', ['get', 'rating'], 2.5], '#e05a5a',
-          ['<', ['get', 'rating'], 3.5], '#e0a33a',
-          '#5ad1a8',
-        ],
+        'circle-color': placeCircleColour() as never,
         'circle-stroke-width': 2,
         'circle-stroke-color': '#11131a',
         'circle-opacity': 0.9,
@@ -153,7 +148,7 @@ export class NoteMap {
       filter: ['==', ['get', 'kind'], 'note'],
       paint: {
         'circle-radius': 6,
-        'circle-color': '#8ab4f8',
+        'circle-color': NOTE_PIN,
         'circle-stroke-width': 2,
         'circle-stroke-color': '#11131a',
       },

@@ -144,3 +144,13 @@ test('an unreachable OSM proxy still lets a note be written', async ({ page }) =
   await page.getByTestId('compose-save').click();
   await expect(page.getByTestId('note-list')).toContainText('Bench in the sun');
 });
+
+// A `display` rule on an element toggled by the `hidden` attribute outranks
+// `[hidden] { display: none }`, which left an empty red strip below the toolbar. It is
+// invisible as a bug report — it just looks like the design — so it gets a test.
+test('the error banner takes no space when there is no error', async ({ page }) => {
+  await page.goto('/');
+  const banner = page.locator('#error');
+  await expect(banner).toBeHidden();
+  expect(await banner.boundingBox()).toBeNull();
+});
