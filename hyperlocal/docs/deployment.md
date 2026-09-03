@@ -225,7 +225,10 @@ The PDS starts, serves, and authenticates perfectly — and then cannot resolve
 `plc.directory`, so every DID resolution hangs until an internal three-second abort. What
 surfaces is `401 BadJwt: Invalid delegation token: This operation was aborted` on
 `getSpaceCredential`, which reads like a signature problem and is a DNS problem. The
-three-second `responseTime` in the PDS log is the tell.
+three-second `responseTime` in the PDS log is the tell, and it is not a coincidence:
+`config.js` sets `resolverTimeout: 3 * SECOND` for identity resolution, so a response that
+takes almost exactly three seconds is that timeout firing rather than anything cryptographic
+going on.
 
 Naming the resolver explicitly in the compose file fixes it, and `100.100.100.100` is the
 right one to name rather than a public resolver: it answers for MagicDNS *and* forwards
@@ -272,6 +275,10 @@ until the account does. So:
    *else* can resolve the handle to that DID.
 
 Doing it in the other order just fails, confusingly.
+
+**A record per person is the price of Option A**, not of atproto. The PDS can prove its own
+handles over HTTP instead, with no DNS at all, but only where it is publicly reachable at
+those names — see "Handle verification without a record per person" under Option B.
 
 **There is no intermediate handle under `PDS_HOSTNAME`.** Setting
 `PDS_SERVICE_HANDLE_DOMAINS=.jscarrott.com` replaces the default rather than adding to it —
@@ -366,9 +373,42 @@ restarts at 3am.
 ### Accounts
 
 Create one account per family member with `pdsadmin`. Handles come out as
-`mum.pds.jscarrott.com`. If you want the nicer `mum.jscarrott.com`, add a
-`_atproto.mum.jscarrott.com` TXT record holding `did=did:plc:…` — DNS only, no web change.
-`_atproto.jscarrott.com` is unused, so you could also claim `@jscarrott.com` for yourself.
+`mum.pds.jscarrott.com`, and **need no DNS record of their own** — see below. If you want
+the nicer `mum.jscarrott.com`, that one does need a `_atproto.mum.jscarrott.com` TXT record
+holding `did=did:plc:…`. `_atproto.jscarrott.com` is unused, so you could also claim
+`@jscarrott.com` for yourself.
+
+### Handle verification without a record per person
+
+A handle can be proved two ways, and the runbook's `_atproto` TXT records are only the
+first: a resolver tries DNS, then falls back to fetching
+`https://<handle>/.well-known/atproto-did`, which returns the DID as plain text. **The PDS
+already serves that endpoint** — `well-known.js` reads the `Host` header and answers from
+the account database for any handle under `PDS_SERVICE_HANDLE_DOMAINS`, which defaults to
+`.<PDS_HOSTNAME>`.
+
+So on this option it is already automatic, and that is a genuine reason to prefer it:
+
+- `*.pds` A record → the VM, so `mum.pds.jscarrott.com` resolves
+- Caddy issues that name a certificate on demand over HTTP-01
+- the PDS answers `/.well-known/atproto-did` for it
+
+Three things you set up once, and every account created afterwards verifies itself with no
+DNS work at all. Option A cannot do this — `ts.net` has no wildcard DNS and no wildcard
+certificates, and under Serve the PDS is not publicly reachable to be asked — which is the
+whole reason handles there need a TXT record each.
+
+**Making the apex-level `mum.jscarrott.com` automatic too** costs more than it is worth for
+a family, but it is the same shape: point `*.jscarrott.com` at the VM and give Caddy a
+**wildcard certificate**, which has to come from a DNS-01 challenge since HTTP-01 cannot
+prove a wildcard. Two things to weigh first. DNS-01 needs an API token from your DNS
+provider and **Hover does not have a public API**, so it means moving the domain to
+Cloudflare or similar. And a wildcard A record points *every* unclaimed name under the
+domain at the PDS — specific records like the `hyperlocal` CNAME still win, but it is a
+broader commitment than it looks.
+
+Per-handle TXT records are two minutes each at family scale. Automate this when adding
+people stops being an occasional event, not before.
 
 ### Backups — do not skip this
 
