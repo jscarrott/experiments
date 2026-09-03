@@ -45,6 +45,7 @@ export class NoteMap {
   private poiLayers: string[] = [];
   private popup: maplibregl.Popup | null = null;
   private draft: maplibregl.Marker | null = null;
+  private readonly geolocate: maplibregl.GeolocateControl;
 
   constructor(container: HTMLElement, callbacks: MapCallbacks, centre: [number, number], zoom: number) {
     this.map = new maplibregl.Map({
@@ -55,7 +56,15 @@ export class NoteMap {
       attributionControl: { compact: true },
     });
     this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-    this.map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: false }), 'top-right');
+    // Kept as a field so "Note where I am" can trigger the same control the corner button
+    // does, rather than calling navigator.geolocation itself. Going through the control
+    // means one permission flow, and the position dot and accuracy ring come for free.
+    this.geolocate = new maplibregl.GeolocateControl({
+      trackUserLocation: false,
+      positionOptions: { enableHighAccuracy: true, timeout: 15_000 },
+      showAccuracyCircle: true,
+    });
+    this.map.addControl(this.geolocate, 'top-right');
 
     this.map.on('load', () => {
       this.addNoteLayers();
@@ -255,6 +264,9 @@ export class NoteMap {
       this.draft = new maplibregl.Marker({ draggable: true, color: '#5ad1a8' })
         .setLngLat([point.lng, point.lat])
         .addTo(this.map);
+      // The geolocate control also creates `.maplibregl-marker` elements for the position
+      // dot and its accuracy ring, so the draft pin needs a name of its own.
+      this.draft.getElement().dataset.testid = 'draft-pin';
       this.draft.on('dragend', () => {
         const { lat, lng } = this.draft!.getLngLat();
         onMove({ lat, lng });
@@ -264,8 +276,59 @@ export class NoteMap {
     this.draft.setLngLat([point.lng, point.lat]);
   }
 
-  flyTo(lat: number, lng: number, zoom?: number): void {
-    this.map.flyTo({ center: [lng, lat], zoom: zoom ?? Math.max(this.map.getZoom(), 16) });
+  /**
+   * Ask the browser where we are.
+   *
+   * `accuracy` is returned rather than swallowed because it decides whether the answer is
+   * worth trusting: indoors it is routinely a hundred metres or more, which is several
+   * shops wide, and the person deserves to be told that before they write a review of the
+   * wrong one.
+   */
+  locate(): Promise<{ lat: number; lng: number; accuracy: number }> {
+    return new Promise((resolve, reject) => {
+      const done = (result: { lat: number; lng: number; accuracy: number }) => {
+        this.geolocate.off('geolocate', onFix);
+        this.geolocate.off('error', onError);
+        this.geolocate.off('outofmaxbounds', onOut);
+        resolve(result);
+      };
+      const onFix = (event: { coords: GeolocationCoordinates }) =>
+        done({
+          lat: event.coords.latitude,
+          lng: event.coords.longitude,
+          accuracy: event.coords.accuracy,
+        });
+      const onError = (event: GeolocationPositionError) => {
+        this.geolocate.off('geolocate', onFix);
+        this.geolocate.off('error', onError);
+        this.geolocate.off('outofmaxbounds', onOut);
+        reject(event);
+      };
+      const onOut = () => onError({ code: 2, message: 'out of bounds' } as GeolocationPositionError);
+
+      this.geolocate.on('geolocate', onFix);
+      this.geolocate.on('error', onError);
+      this.geolocate.on('outofmaxbounds', onOut);
+
+      // Returns false when the control has not finished setting up, which happens if this
+      // is called before the map has loaded.
+      if (!this.geolocate.trigger()) {
+        onError({ code: 2, message: 'the map is not ready yet' } as GeolocationPositionError);
+      }
+    });
+  }
+
+  /**
+   * `offsetY` shifts the target up the screen by that many pixels, for when something is
+   * covering the bottom of the map — which on a phone is the note sheet, sitting exactly
+   * over the pin you have just been asked to drag.
+   */
+  flyTo(lat: number, lng: number, zoom?: number, offsetY = 0): void {
+    this.map.flyTo({
+      center: [lng, lat],
+      zoom: zoom ?? Math.max(this.map.getZoom(), 16),
+      offset: [0, -offsetY],
+    });
   }
 
   get zoom(): number {

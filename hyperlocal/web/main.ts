@@ -4,8 +4,13 @@ import type { Note, PlaceCandidate } from '../shared/types.js';
 import { initAuth, signIn } from './auth.js';
 import { DemoSource, DEMO_HANDLES } from './demo.js';
 import { fill, h, mustFind } from './dom.js';
-import { explainSignInFailure, explainSpaceFailure, type Explained } from './errors.js';
-import { NoteMap } from './map.js';
+import {
+  explainLocationFailure,
+  explainSignInFailure,
+  explainSpaceFailure,
+  type Explained,
+} from './errors.js';
+import { NoteMap, POI_MIN_ZOOM } from './map.js';
 import { mountMembers } from './members.js';
 import { nearbyPlaces } from './places-api.js';
 import type { NoteSource } from './source.js';
@@ -135,6 +140,32 @@ const handlers = {
 };
 
 /**
+ * "Note where I am" — the phone flow this app is actually for: you are stood outside the
+ * place, so the map should come to you rather than you hunting for the shop on it.
+ *
+ * The button reports its own progress. A fix can take several seconds, and a control that
+ * looks inert for that long gets pressed again.
+ */
+async function composeHere(): Promise<void> {
+  const button = mustFind('#note-here') as HTMLButtonElement;
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Finding you…';
+  try {
+    const fix = await noteMap.locate();
+    // Not awaited: the rest is an Overpass lookup that the compose panel reports on
+    // itself, and holding the button through it makes a found location look like a
+    // still-searching one.
+    void openCompose(fix.lat, fix.lng, null, fix.accuracy, Math.max(noteMap.zoom, POI_MIN_ZOOM + 2));
+  } catch (error) {
+    report(explainLocationFailure(error));
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
+
+/**
  * The two floating panels a phone gets instead of side-by-side sidebars.
  *
  * State lives in data attributes on the workspace so the CSS owns every transition and
@@ -257,6 +288,8 @@ async function moveDraft(lat: number, lng: number): Promise<void> {
   if (!draft) return;
   draft.lat = lat;
   draft.lng = lng;
+  // Placed by hand now, so the device's uncertainty no longer describes it.
+  delete draft.accuracy;
   draft.loadingPlaces = true;
   drawCompose();
   await lookUpPlaces(lat, lng, null);
@@ -293,13 +326,26 @@ async function lookUpPlaces(lat: number, lng: number, picked: PlaceCandidate | n
 function closeCompose(): void {
   draft = null;
   noteMap.setDraft(null, () => {});
+  mustFind('#workspace').dataset.compose = 'off';
   drawCompose();
 }
 
-async function openCompose(lat: number, lng: number, picked: PlaceCandidate | null): Promise<void> {
+/** True on the layout where the sheet lies over the map rather than beside it. */
+function sheetOverlaysMap(): boolean {
+  return window.matchMedia('(max-width: 900px)').matches;
+}
+
+async function openCompose(
+  lat: number,
+  lng: number,
+  picked: PlaceCandidate | null,
+  accuracy?: number,
+  zoom?: number,
+): Promise<void> {
   draft = {
     lat,
     lng,
+    ...(accuracy === undefined ? {} : { accuracy }),
     text: '',
     tags: '',
     place: picked,
@@ -319,6 +365,16 @@ async function openCompose(lat: number, lng: number, picked: PlaceCandidate | nu
   // the only feedback before this was a pair of decimals in the panel.
   noteMap.closePopup();
   noteMap.setDraft({ lat, lng }, (point) => void moveDraft(point.lat, point.lng));
+
+  // With the sheet open the pin would sit behind it — worst of all when a coarse fix has
+  // just asked for it to be dragged. Shrink the sheet and lift the pin into what is left.
+  if (sheetOverlaysMap()) {
+    mustFind('#workspace').dataset.compose = 'on';
+    const strip = mustFind('#sheet').getBoundingClientRect().height;
+    noteMap.flyTo(lat, lng, zoom, strip / 2);
+  } else if (zoom !== undefined) {
+    noteMap.flyTo(lat, lng, zoom);
+  }
 
   await lookUpPlaces(lat, lng, picked);
 }
@@ -476,6 +532,7 @@ async function start(): Promise<void> {
 
   store.update({ filter: filterFromQuery(window.location.search) });
   mustFind('#add-note').addEventListener('click', () => handlers.startCompose());
+  mustFind('#note-here').addEventListener('click', () => void composeHere());
   wirePhoneLayout();
   renderMapKey(mustFind('#map-key'));
 

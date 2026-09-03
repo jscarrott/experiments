@@ -77,6 +77,9 @@ body { background: var(--bg); color: var(--text); font: 13px/1.5 var(--font); ov
 }
 .button:hover { border-color: var(--accent); }
 .button--small { padding: 4px 8px; }
+/* The phone-first action, so it gets the weight. */
+.button--primary { border-color: var(--accent); color: var(--accent); }
+.button--primary:hover { background: rgba(90, 209, 168, 0.1); }
 .button[disabled] { opacity: 0.6; cursor: default; }
 
 .link { background: none; border: 0; padding: 0; color: var(--accent);
@@ -214,6 +217,9 @@ body { background: var(--bg); color: var(--text); font: 13px/1.5 var(--font); ov
     transition: transform 0.18s ease;
   }
   .workspace[data-sheet='open'] .sidebar--right { transform: none; }
+  /* Writing a note needs the map as well as the form — the pin is draggable, and a rough
+     fix asks you to drag it. So the sheet gives some height back while composing. */
+  .workspace[data-compose='on'] .sidebar--right { max-height: 62%; }
 
   .sheet__handle {
     display: flex; flex-direction: column; align-items: center; gap: 6px;

@@ -159,7 +159,7 @@ test('the draft pin appears on the map, can be dragged, and is cleared on cancel
   await page.goto('/');
   await page.getByTestId('add-note').click();
 
-  const pin = page.locator('.maplibregl-marker');
+  const pin = page.getByTestId('draft-pin');
   await expect(pin).toHaveCount(1);
 
   // The panel prints the draft's coordinates, so they are what proves the drag landed.
@@ -204,5 +204,5 @@ test('clicking a pin does not also start writing a new note', async ({ page }) =
   await page.goto('/');
   await clickCentrePin(page);
   await expect(page.getByTestId('compose')).toHaveCount(0);
-  await expect(page.locator('.maplibregl-marker')).toHaveCount(0);
+  await expect(page.getByTestId('draft-pin')).toHaveCount(0);
 });

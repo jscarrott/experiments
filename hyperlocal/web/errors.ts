@@ -102,3 +102,42 @@ export function explainSignInFailure(error: unknown): Explained {
 
   return { headline: 'Sign in failed.', detail: raw };
 }
+
+/**
+ * Why the browser would not say where we are.
+ *
+ * `GeolocationPositionError` codes are 1 permission, 2 unavailable, 3 timeout, and the
+ * numbers are all anyone ever sees. Denial is the common one and is not a fault: it needs
+ * to name the alternative rather than read as a failure.
+ */
+export function explainLocationFailure(error: unknown): Explained {
+  const code = typeof (error as GeolocationPositionError)?.code === 'number'
+    ? (error as GeolocationPositionError).code
+    : 0;
+  const detail = (error as Error)?.message || undefined;
+
+  if (code === 1) {
+    return {
+      headline:
+        'Location permission was refused. You can still tap the map where you are, or allow location for this site in your browser settings.',
+      detail,
+    };
+  }
+  if (code === 3) {
+    return {
+      headline: 'Finding you took too long. Indoors this often fails — tap the map instead.',
+      detail,
+    };
+  }
+  if (!window.isSecureContext) {
+    // The API is silently unavailable rather than refused on plain http.
+    return {
+      headline: 'Your browser only shares location over a secure connection, so this page cannot use it.',
+      detail,
+    };
+  }
+  return {
+    headline: 'Could not work out where you are. Tap the map where you want the note instead.',
+    detail,
+  };
+}

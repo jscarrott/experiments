@@ -1,5 +1,8 @@
 import { clear, fill, h, ratingLabel, relativeTime } from './dom.js';
 import { MAP_KEY } from './map-style.js';
+
+/** Above this, a fix is wider than a shopfront and should not be trusted silently. */
+export const COARSE_FIX_METRES = 40;
 import type { AppState, DerivedState } from './state.js';
 import type { Note, PlaceCandidate, PlaceGroup } from '../shared/types.js';
 
@@ -265,6 +268,8 @@ export interface ComposeDraft {
   loadingPlaces: boolean;
   error: string | null;
   saving: boolean;
+  /** Metres of uncertainty, when the point came from the device rather than from a tap. */
+  accuracy?: number;
 }
 
 export interface ComposeHandlers {
@@ -300,7 +305,17 @@ export function renderCompose(
         h('button', { type: 'button', class: 'link', onclick: () => handlers.cancel(), text: 'Close' }),
       ),
 
-      h('p', { class: 'muted', text: `${draft.lat.toFixed(5)}, ${draft.lng.toFixed(5)}` }),
+      h('p', { class: 'muted', 'data-testid': 'compose-point',
+        text: draft.accuracy === undefined
+          ? `${draft.lat.toFixed(5)}, ${draft.lng.toFixed(5)}`
+          : `${draft.lat.toFixed(5)}, ${draft.lng.toFixed(5)} · give or take ${Math.round(draft.accuracy)}m` }),
+
+      // A fix good to 80m covers most of a high street. Saying so is the difference
+      // between a note on the right shop and a review of its neighbour — and the pin is
+      // draggable, so there is something to do about it.
+      draft.accuracy !== undefined && draft.accuracy > COARSE_FIX_METRES &&
+        h('p', { class: 'muted', 'data-testid': 'coarse-fix',
+          text: 'That is a rough fix. Drag the pin onto the right spot before saving.' }),
 
       draft.loadingPlaces
         ? h('p', { class: 'muted', text: 'Looking for what is here…' })
