@@ -11,6 +11,7 @@ import type { NoteSource } from './source.js';
 import {
   createSpace,
   mintSpaceCredential,
+  resolveDidHandle,
   resolveHandle,
   resolvePds,
   SpaceSource,
@@ -49,6 +50,25 @@ const viewer: ViewerInfo = {
 
 function shortDid(did: string): string {
   return did.length > 22 ? `${did.slice(0, 12)}…${did.slice(-6)}` : did;
+}
+
+/**
+ * Fill in handles for DIDs we have not named yet, then repaint.
+ *
+ * Deliberately fire-and-forget: every one of these is a DID document fetch plus a
+ * verifying handle lookup, and none of it should hold up drawing the notes. Names
+ * appearing a moment after the map is the right trade — waiting on them means a blank
+ * sidebar while `plc.directory` thinks about it.
+ */
+function learnHandles(dids: Iterable<string>, service: string): void {
+  const wanted = [...new Set(dids)].filter((did) => !handles.has(did));
+  if (wanted.length === 0) return;
+  void Promise.all(
+    wanted.map(async (did) => {
+      const handle = await resolveDidHandle(did, service);
+      handles.set(did, handle ?? shortDid(did));
+    }),
+  ).then(() => store.update({}));
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +323,10 @@ async function start(): Promise<void> {
     );
   };
 
+  // Any PDS can answer resolveHandle, so the space's own host is as good as anywhere and
+  // is already known to be reachable. Null in demo mode, where handles are fixtures.
+  let handleService: string | null = null;
+
   if (auth?.session) {
     // Adapt OAuthSession to UserSession explicitly rather than casting. `fetchHandler`
     // is a prototype method that reads `this.getTokenSet()`, so handing over a bare
@@ -319,6 +343,7 @@ async function start(): Promise<void> {
     try {
       const context = await connectSpace(session);
       source = context.source;
+      handleService = context.ownerPds;
       // The invite link has to name the owner explicitly: a space is anchored on its
       // owner's DID, so without this a guest would open their own empty space instead.
       inviteLink = `${window.location.origin}/?owner=${encodeURIComponent(context.ownerDid)}`;
@@ -330,7 +355,7 @@ async function start(): Promise<void> {
         onChange(dids) {
           // Members who have never written do not appear in the notes, so the member
           // list is the only place their DID is known at all.
-          for (const did of dids) if (!handles.has(did)) handles.set(did, shortDid(did));
+          learnHandles(dids, context.ownerPds);
         },
       });
     } catch (error) {
@@ -343,6 +368,9 @@ async function start(): Promise<void> {
 
   try {
     const notes = await source.load();
+    // Authors who are not in the member list — someone since removed, say — still have
+    // notes on the map, and a DID in the sidebar is unreadable.
+    if (handleService) learnHandles(notes.map((n) => n.author), handleService);
     store.update({ notes, loading: false });
   } catch (error) {
     store.update({ loading: false, error: `Could not load notes: ${(error as Error).message}` });
@@ -374,14 +402,18 @@ async function connectSpace(session: UserSession): Promise<SpaceContext> {
       : await resolveHandle(ownerParam, userPds)
     : session.did;
 
-  handles.set(session.did, ownerParam && ownerDid !== session.did ? shortDid(session.did) : session.did);
+  // Your own name is worth waiting for: it is the header, and it is drawn once. Everyone
+  // else's is learned in the background by learnHandles.
+  const viewerHandle = (await resolveDidHandle(session.did, userPds)) ?? shortDid(session.did);
+  handles.set(session.did, viewerHandle);
 
   const space = spaceRef(ownerDid);
   const ownerPds = ownerDid === session.did ? userPds : await resolvePds(ownerDid);
+  if (ownerDid !== session.did) learnHandles([ownerDid], userPds);
 
   const connect = async (): Promise<SpaceContext> => ({
     source: new SpaceSource(
-      session.did,
+      viewerHandle,
       session.did,
       session,
       await mintSpaceCredential(session, space, resolvePds),

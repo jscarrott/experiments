@@ -107,21 +107,57 @@ export async function mintSpaceCredential(
   return new SpaceCredential(body.credential, key);
 }
 
-/** Resolve a DID to its PDS service endpoint. */
-export async function resolvePds(did: string): Promise<string> {
+interface DidDocument {
+  alsoKnownAs?: string[];
+  service?: { id?: string; type?: string; serviceEndpoint?: string }[];
+}
+
+async function fetchDidDoc(did: string): Promise<DidDocument> {
   const url = did.startsWith('did:web:')
     ? `https://${did.slice('did:web:'.length)}/.well-known/did.json`
     : `https://plc.directory/${did}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`could not resolve ${did}`);
-  const doc = (await response.json()) as {
-    service?: { id?: string; type?: string; serviceEndpoint?: string }[];
-  };
+  return (await response.json()) as DidDocument;
+}
+
+/** Resolve a DID to its PDS service endpoint. */
+export async function resolvePds(did: string): Promise<string> {
+  const doc = await fetchDidDoc(did);
   const pds = doc.service?.find(
     (s) => s.id === '#atproto_pds' || s.type === 'AtprotoPersonalDataServer',
   )?.serviceEndpoint;
   if (!pds) throw new Error(`${did} has no PDS in its DID document`);
   return pds;
+}
+
+/**
+ * Resolve a DID back to its handle, for display. Null when there isn't a trustworthy one.
+ *
+ * `alsoKnownAs` is a claim made by the DID's own owner and nothing more — anyone can put
+ * `at://someone.else` in their own document, and a space's member list is exactly the
+ * place where being shown a name you recognise matters. atproto's rule is that a handle
+ * counts only if resolving it leads back to the same DID, so that round trip is done here
+ * rather than trusting the document. A handle that fails it is discarded and the caller
+ * falls back to the DID, which is ugly and honest.
+ */
+export async function resolveDidHandle(did: string, service: string): Promise<string | null> {
+  let claimed: string | undefined;
+  try {
+    const doc = await fetchDidDoc(did);
+    claimed = doc.alsoKnownAs?.find((aka) => aka.startsWith('at://'))?.slice('at://'.length);
+  } catch {
+    return null;
+  }
+  if (!claimed) return null;
+
+  try {
+    return (await resolveHandle(claimed, service)) === did ? claimed : null;
+  } catch {
+    // An unresolvable handle is the normal case mid-setup, before the `_atproto` TXT
+    // record has propagated. Not worth an error; the DID still identifies the person.
+    return null;
+  }
 }
 
 export interface SyncReport {
