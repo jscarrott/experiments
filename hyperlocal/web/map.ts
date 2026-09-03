@@ -21,12 +21,21 @@ const POI_SOURCE_LAYER = 'poi';
 /** The zoom below which the tiles carry no POIs at all, per the OpenMapTiles schema. */
 export const POI_MIN_ZOOM = 14;
 
+/** What was clicked, for the caller to turn into popup content. */
+export type PopupTarget = { kind: 'note'; uri: string } | { kind: 'place'; key: string };
+
 export interface MapCallbacks {
   onMoveEnd(): void;
   /** A business picked out of the tiles, or a bare point when nothing was under the tap. */
   onPick(point: { lat: number; lng: number }, candidate: PlaceCandidate | null): void;
-  onNoteClick(uri: string): void;
-  onPlaceClick(key: string): void;
+  /**
+   * Content for the popup over a clicked pin, or null for no popup. The map asks rather
+   * than builds: formatting a note needs handles, relative times and rating labels, none
+   * of which belong in a file about maps.
+   */
+  popupFor(target: PopupTarget): HTMLElement | null;
+  /** The draft pin was dragged to a new point. */
+  onDraftMove(point: { lat: number; lng: number }): void;
 }
 
 export class NoteMap {
@@ -34,6 +43,8 @@ export class NoteMap {
   private ready = false;
   private pending: { notes: Note[]; groups: PlaceGroup[] } | null = null;
   private poiLayers: string[] = [];
+  private popup: maplibregl.Popup | null = null;
+  private draft: maplibregl.Marker | null = null;
 
   constructor(container: HTMLElement, callbacks: MapCallbacks, centre: [number, number], zoom: number) {
     this.map = new maplibregl.Map({
@@ -66,6 +77,14 @@ export class NoteMap {
     this.map.on('moveend', () => callbacks.onMoveEnd());
 
     this.map.on('click', (event: MapMouseEvent) => {
+      // A click that landed on an existing note or place is about reading it, not about
+      // starting a new one. Without this, tapping a pin opened its popup and began a
+      // fresh draft underneath it at the same time.
+      const ours = this.map.queryRenderedFeatures(event.point, {
+        layers: ['note-points', 'place-points'].filter((id) => this.map.getLayer(id)),
+      });
+      if (ours.length > 0) return;
+
       const { lat, lng } = event.lngLat;
       const features = this.poiLayers.length
         ? this.map.queryRenderedFeatures(event.point, { layers: this.poiLayers })
@@ -89,11 +108,11 @@ export class NoteMap {
 
     this.map.on('click', 'note-points', (event) => {
       const uri = event.features?.[0]?.properties?.uri;
-      if (typeof uri === 'string') callbacks.onNoteClick(uri);
+      if (typeof uri === 'string') this.openPopup(event.lngLat, callbacks.popupFor({ kind: 'note', uri }));
     });
     this.map.on('click', 'place-points', (event) => {
       const key = event.features?.[0]?.properties?.key;
-      if (typeof key === 'string') callbacks.onPlaceClick(key);
+      if (typeof key === 'string') this.openPopup(event.lngLat, callbacks.popupFor({ kind: 'place', key }));
     });
 
     for (const layer of ['note-points', 'place-points']) {
@@ -192,6 +211,57 @@ export class NoteMap {
     }
 
     source.setData({ type: 'FeatureCollection', features });
+  }
+
+  /**
+   * Show a popup over a pin. Reading a note used to mean looking at the sidebar, which on
+   * a phone is inside a closed sheet — so tapping a pin changed something you could not
+   * see.
+   */
+  private openPopup(at: maplibregl.LngLatLike, content: HTMLElement | null): void {
+    this.popup?.remove();
+    this.popup = null;
+    if (!content) return;
+    this.popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: true,
+      maxWidth: '280px',
+      offset: 12,
+    })
+      .setLngLat(at)
+      .setDOMContent(content)
+      .addTo(this.map);
+  }
+
+  closePopup(): void {
+    this.popup?.remove();
+    this.popup = null;
+  }
+
+  /**
+   * The pin for the note being written, or null to clear it.
+   *
+   * Draggable, which is the point: tapping a shopfront on a phone is a coarse gesture,
+   * and before this the only feedback that you had hit the wrong side of the street was a
+   * pair of decimal numbers in the compose panel.
+   */
+  setDraft(point: { lat: number; lng: number } | null, onMove: (p: { lat: number; lng: number }) => void): void {
+    if (!point) {
+      this.draft?.remove();
+      this.draft = null;
+      return;
+    }
+    if (!this.draft) {
+      this.draft = new maplibregl.Marker({ draggable: true, color: '#5ad1a8' })
+        .setLngLat([point.lng, point.lat])
+        .addTo(this.map);
+      this.draft.on('dragend', () => {
+        const { lat, lng } = this.draft!.getLngLat();
+        onMove({ lat, lng });
+      });
+      return;
+    }
+    this.draft.setLngLat([point.lng, point.lat]);
   }
 
   flyTo(lat: number, lng: number, zoom?: number): void {

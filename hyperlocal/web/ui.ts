@@ -156,6 +156,37 @@ export function renderList(
   );
 }
 
+/**
+ * The popup over a single dropped pin: the note itself, rendered exactly as the list
+ * renders it, so delete and the author link keep working from the map.
+ */
+export function renderNotePopup(note: Note, viewer: ViewerInfo, handlers: UiHandlers): HTMLElement {
+  return h('div', { class: 'popup', 'data-testid': 'note-popup' },
+    h('ul', { class: 'list list--plain' }, noteItem(note, viewer, handlers, false)),
+  );
+}
+
+/**
+ * The popup over a business: a summary and a way in. Deliberately not the full list —
+ * several notes will not fit over a map on a phone, and the place page already exists.
+ */
+export function renderPlacePopup(group: PlaceGroup, handlers: UiHandlers): HTMLElement {
+  const count = group.notes.length;
+  return h('div', { class: 'popup', 'data-testid': 'place-popup' },
+    h('h3', { class: 'popup__name', text: group.place.name ?? 'Unnamed place' }),
+    group.averageRating === undefined
+      ? h('p', { class: 'muted', text: 'No ratings yet' })
+      : h('p', { class: 'note__rating', text: `${ratingLabel(Math.round(group.averageRating))}  ${group.averageRating.toFixed(1)}` }),
+    h('button', {
+      type: 'button',
+      class: 'button button--small',
+      'data-testid': 'popup-open-place',
+      onclick: () => handlers.openPlace(group.key),
+      text: `Read ${count} note${count === 1 ? '' : 's'}`,
+    }),
+  );
+}
+
 function renderPlace(group: PlaceGroup, viewer: ViewerInfo, handlers: UiHandlers): HTMLElement {
   return h('div', { class: 'panel', 'data-testid': 'place-view' },
     h('button', { type: 'button', class: 'link', onclick: () => handlers.openPlace(null), text: '← Back' }),

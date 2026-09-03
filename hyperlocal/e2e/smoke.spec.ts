@@ -154,3 +154,55 @@ test('the error banner takes no space when there is no error', async ({ page }) 
   await expect(banner).toBeHidden();
   expect(await banner.boundingBox()).toBeNull();
 });
+
+test('the draft pin appears on the map, can be dragged, and is cleared on cancel', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('add-note').click();
+
+  const pin = page.locator('.maplibregl-marker');
+  await expect(pin).toHaveCount(1);
+
+  // The panel prints the draft's coordinates, so they are what proves the drag landed.
+  const compose = page.getByTestId('compose');
+  const before = await compose.locator('p.muted').first().textContent();
+
+  const box = (await pin.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 90, box.y + box.height / 2 + 60, { steps: 12 });
+  await page.mouse.up();
+
+  await expect(compose.locator('p.muted').first()).not.toHaveText(before ?? '');
+  await expect(pin).toHaveCount(1);
+
+  await compose.getByRole('button', { name: 'Close' }).click();
+  // A pin left behind would point at a note that was never written.
+  await expect(pin).toHaveCount(0);
+});
+
+/**
+ * Clicking a pin. The coordinates are made deterministic rather than guessed: focusing a
+ * note from the list flies the map to it, which leaves its pin at the centre of the map
+ * container, so that is where the click goes.
+ */
+async function clickCentrePin(page: Page) {
+  await page.getByTestId('note-list').locator('.note .link').first().click();
+  await page.waitForTimeout(1400); // the flyTo animation
+  const map = (await page.locator('#map').boundingBox())!;
+  await page.mouse.click(map.x + map.width / 2, map.y + map.height / 2);
+}
+
+test('clicking a pin opens a popup instead of only changing the sidebar', async ({ page }) => {
+  await page.goto('/');
+  await clickCentrePin(page);
+  await expect(page.locator('.maplibregl-popup')).toHaveCount(1);
+});
+
+// Clicking a pin used to open its popup and start a fresh draft underneath it at the
+// same time, because the generic map-click handler never excluded our own layers.
+test('clicking a pin does not also start writing a new note', async ({ page }) => {
+  await page.goto('/');
+  await clickCentrePin(page);
+  await expect(page.getByTestId('compose')).toHaveCount(0);
+  await expect(page.locator('.maplibregl-marker')).toHaveCount(0);
+});

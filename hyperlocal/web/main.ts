@@ -18,12 +18,21 @@ import {
   SpaceSource,
   type UserSession,
 } from './space.js';
-import { boundsToBbox, filterFromQuery, filterToQuery, Store, type AppState } from './state.js';
+import {
+  boundsToBbox,
+  filterFromQuery,
+  filterToQuery,
+  Store,
+  type AppState,
+  type DerivedState,
+} from './state.js';
 import {
   renderCompose,
   renderFilters,
   renderList,
   renderMapKey,
+  renderNotePopup,
+  renderPlacePopup,
   type ComposeDraft,
   type ViewerInfo,
 } from './ui.js';
@@ -100,6 +109,12 @@ const handlers = {
   },
   openPlace(key: string | null) {
     store.update({ openPlace: key });
+    // The place page renders into the sheet, so on a phone opening one from a map popup
+    // used to update something you could not see.
+    if (key) {
+      noteMap.closePopup();
+      setPanel('sheet', true);
+    }
   },
   focusNote(note: Note) {
     noteMap.flyTo(note.lat, note.lng);
@@ -167,7 +182,12 @@ function syncUrl(): void {
   history.replaceState(null, '', url.toString());
 }
 
+/** The most recent derived state, for the popup callbacks — which are driven by a map
+ *  click rather than by a render, so they have no `derived` handed to them. */
+let latest: DerivedState | null = null;
+
 store.subscribe((state, derived) => {
+  latest = derived;
   renderFilters(mustFind('#filters'), state, derived, viewer, handlers);
   renderList(mustFind('#list'), state, derived, viewer, handlers);
   if (noteMap) noteMap.render(derived.visible, derived.groups);
@@ -221,10 +241,59 @@ function drawCompose(): void {
     },
     submit: () => void saveDraft(),
     cancel() {
-      draft = null;
-      drawCompose();
+      closeCompose();
     },
   });
+}
+
+/**
+ * Move the draft to where its pin was dragged, keeping everything already written.
+ *
+ * The Overpass lookup runs again because the answer genuinely changed — a drag is as
+ * deliberate an act as the first tap, and the comment in `openCompose` about never
+ * querying on pan or zoom is about incidental movement, not this.
+ */
+async function moveDraft(lat: number, lng: number): Promise<void> {
+  if (!draft) return;
+  draft.lat = lat;
+  draft.lng = lng;
+  draft.loadingPlaces = true;
+  drawCompose();
+  await lookUpPlaces(lat, lng, null);
+}
+
+/**
+ * Fill in the candidate list for wherever the draft currently is.
+ *
+ * `picked` is the business the tiles said was under the tap, when there was one: it has a
+ * name but no id, because the OpenMapTiles poi schema does not carry one, so it has to be
+ * matched by name against the Overpass answer to become identifiable.
+ */
+async function lookUpPlaces(lat: number, lng: number, picked: PlaceCandidate | null): Promise<void> {
+  // The only Overpass call, made when someone has actually chosen a spot — by tapping or
+  // by dragging the pin. Never on pan or zoom, which would burn the public instance's
+  // daily budget in a minute.
+  const lookup = await nearbyPlaces(lat, lng);
+  if (!draft || draft.lat !== lat || draft.lng !== lng) return; // moved on already
+
+  draft.loadingPlaces = false;
+  draft.degraded = lookup.degraded;
+  draft.candidates = lookup.candidates;
+
+  const byName = picked?.name ? lookup.candidates.find((c) => c.name === picked.name) : undefined;
+  // Dragging re-selects on the same rule a tap uses, rather than keeping a shop the pin
+  // has been moved away from. Whatever it picks is one tap away from being corrected;
+  // silently still claiming the old place is not.
+  draft.place = byName ?? lookup.candidates[0] ?? null;
+  drawCompose();
+}
+
+/** Drop the draft and the pin that stands for it. One place, so the pin cannot be left
+ *  behind on the map pointing at a note that was never written. */
+function closeCompose(): void {
+  draft = null;
+  noteMap.setDraft(null, () => {});
+  drawCompose();
 }
 
 async function openCompose(lat: number, lng: number, picked: PlaceCandidate | null): Promise<void> {
@@ -246,24 +315,12 @@ async function openCompose(lat: number, lng: number, picked: PlaceCandidate | nu
   // which covers the map you just picked a point on.
   setPanel('sheet', true);
   setPanel('filters', false);
+  // A pin you can see, and drag: tapping a shopfront on a phone is a coarse gesture, and
+  // the only feedback before this was a pair of decimals in the panel.
+  noteMap.closePopup();
+  noteMap.setDraft({ lat, lng }, (point) => void moveDraft(point.lat, point.lng));
 
-  // The one and only Overpass call: when someone has actually chosen a spot. Never on
-  // pan or zoom, which would burn the public instance's daily budget in a minute.
-  const lookup = await nearbyPlaces(lat, lng);
-  if (!draft || draft.lat !== lat || draft.lng !== lng) return; // moved on already
-
-  draft.loadingPlaces = false;
-  draft.degraded = lookup.degraded;
-  draft.candidates = lookup.candidates;
-
-  // A tile pick gives a name but no id; the matching Overpass candidate gives the id.
-  if (picked?.name) {
-    const matched = lookup.candidates.find((c) => c.name === picked.name);
-    draft.place = matched ?? (lookup.candidates[0] ?? null);
-  } else {
-    draft.place = lookup.candidates[0] ?? null;
-  }
-  drawCompose();
+  await lookUpPlaces(lat, lng, picked);
 }
 
 async function saveDraft(): Promise<void> {
@@ -302,8 +359,7 @@ async function saveDraft(): Promise<void> {
   try {
     const note = await source.create(record);
     store.addNote(note);
-    draft = null;
-    drawCompose();
+    closeCompose();
   } catch (error) {
     if (draft) {
       draft.saving = false;
@@ -402,12 +458,16 @@ async function start(): Promise<void> {
       onPick(point, candidate) {
         void openCompose(point.lat, point.lng, candidate);
       },
-      onNoteClick(uri) {
-        const note = store.current.notes.find((n) => n.uri === uri);
-        if (note) handlers.focusNote(note);
+      popupFor(target) {
+        if (target.kind === 'note') {
+          const note = store.current.notes.find((n) => n.uri === target.uri);
+          return note ? renderNotePopup(note, viewer, handlers) : null;
+        }
+        const group = latest?.groups.find((g) => g.key === target.key);
+        return group ? renderPlacePopup(group, handlers) : null;
       },
-      onPlaceClick(key) {
-        handlers.openPlace(key);
+      onDraftMove(point) {
+        void moveDraft(point.lat, point.lng);
       },
     },
     DEFAULT_CENTRE,

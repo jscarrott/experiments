@@ -148,6 +148,24 @@ body { background: var(--bg); color: var(--text); font: 13px/1.5 var(--font); ov
 .viewport .maplibregl-ctrl-attrib a { color: var(--text-dim); }
 .viewport .maplibregl-ctrl-attrib-button { filter: invert(1) opacity(0.85); }
 
+/* Popups are white cards with a white tip by default. The tip is a separate element and
+   needs colouring on its own, or you get a white arrow pointing at a dark box. */
+.viewport .maplibregl-popup-content {
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 10px 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.viewport .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--panel); }
+.viewport .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--panel); }
+.viewport .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--panel); }
+.viewport .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--panel); }
+.viewport .maplibregl-popup-close-button { color: var(--text-dim); font-size: 16px; }
+.viewport .maplibregl-popup-close-button:hover { background: none; color: var(--text); }
+
+.popup__name { margin: 0 0 4px; font-size: 14px; }
+.popup .note { border: 0; padding: 0; }
+.popup .list { gap: 0; }
+
 /* The basemap is bright and the shell is dark, and no amount of restyling changes that.
    Recessing the map behind an inner shadow at least makes the seam look intended. */
 .viewport::after {
