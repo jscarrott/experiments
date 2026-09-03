@@ -126,10 +126,13 @@ body { background: var(--bg); color: var(--text); font: 13px/1.5 var(--font); ov
 .badge--warn { background: rgba(224, 90, 90, 0.16); color: var(--error); }
 
 .key__row { display: flex; align-items: center; gap: 8px; padding: 3px 0; color: var(--text-dim); }
+.key__row { align-items: flex-start; }
 .key__dot {
-  width: 11px; height: 11px; border-radius: 50%; flex: none;
+  width: 11px; height: 11px; border-radius: 50%; flex: none; margin-top: 4px;
   border: 2px solid #11131a; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
+/* Matches the map: a business is a ring around whatever the basemap draws there. */
+.key__dot--ring { width: 13px; height: 13px; border-width: 2px; box-shadow: none; }
 
 /* MapLibre's controls default to white cards. Against this shell they read as a
    third-party widget dropped onto the page, which is most of why the bright basemap and

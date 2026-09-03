@@ -144,11 +144,24 @@ export class NoteMap {
       source: NOTES_SOURCE,
       filter: ['==', ['get', 'kind'], 'place'],
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 9, 8, 18],
+        // A ring, not a disc. The basemap already draws a proper icon for a café or a
+        // pub, and painting an opaque circle on top threw that away and replaced it with
+        // a dot that says nothing about what the place is. Ours now annotates the
+        // basemap's icon rather than hiding it: a coloured ring around it, with a faint
+        // tint so it still reads against a busy street at low zoom, where the tiles carry
+        // no POI icons at all.
+        //
+        // The ring is deliberately not much wider than an icon. It has to encircle
+        // something whose exact position we do not know — the group sits at the mean of
+        // where people tapped, and OsmPlace carries no coordinates of its own — and a
+        // larger ring would start covering the neighbouring shops you might want to write
+        // about instead.
+        'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 13, 8, 22],
         'circle-color': placeCircleColour() as never,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#11131a',
-        'circle-opacity': 0.9,
+        'circle-opacity': 0.18,
+        'circle-stroke-width': 2.5,
+        'circle-stroke-color': placeCircleColour() as never,
+        'circle-stroke-opacity': 0.95,
       },
     });
     this.map.addLayer({
@@ -159,7 +172,7 @@ export class NoteMap {
       layout: {
         'text-field': ['get', 'label'],
         'text-size': 11,
-        'text-offset': [0, 1.4],
+        'text-offset': [0, 1.9],
         'text-anchor': 'top',
         'text-allow-overlap': false,
       },
@@ -202,7 +215,12 @@ export class NoteMap {
         properties: {
           kind: 'place',
           key: group.key,
-          label: group.place.name ?? 'Unnamed place',
+          // The count used to live only in the circle's radius, which nobody can read off
+          // a map. Naming it costs one character of clutter for a place with one note.
+          label:
+            group.notes.length > 1
+              ? `${group.place.name ?? 'Unnamed place'} · ${group.notes.length}`
+              : (group.place.name ?? 'Unnamed place'),
           count: group.notes.length,
           rated: group.averageRating !== undefined,
           rating: group.averageRating ?? 0,

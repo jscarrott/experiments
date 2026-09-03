@@ -30,14 +30,16 @@ export function placeCircleColour(): unknown[] {
 export interface KeyEntry {
   colour: string;
   label: string;
+  /** A business is drawn as a ring around the basemap's own icon; a loose note as a dot. */
+  shape: 'ring' | 'dot';
 }
 
 export const MAP_KEY: KeyEntry[] = [
-  { colour: PLACE_GOOD, label: `Rated ${GOOD_FROM} and up` },
-  { colour: PLACE_FAIR, label: `Rated ${FAIR_FROM} to ${GOOD_FROM}` },
-  { colour: PLACE_POOR, label: `Rated under ${FAIR_FROM}` },
-  { colour: PLACE_UNRATED, label: 'Written about, but not rated' },
-  { colour: NOTE_PIN, label: 'A dropped pin, not a business' },
+  { colour: PLACE_GOOD, label: `Rated ${GOOD_FROM} and up`, shape: 'ring' },
+  { colour: PLACE_FAIR, label: `Rated ${FAIR_FROM} to ${GOOD_FROM}`, shape: 'ring' },
+  { colour: PLACE_POOR, label: `Rated under ${FAIR_FROM}`, shape: 'ring' },
+  { colour: PLACE_UNRATED, label: 'Written about, but not rated', shape: 'ring' },
+  { colour: NOTE_PIN, label: 'A dropped pin, not a business', shape: 'dot' },
 ];
 
 /** Every colour the map can paint a feature. Used by the drift test. */

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAP_KEY, paintedColours } from '../web/map-style.js';
+import { MAP_KEY, NOTE_PIN, paintedColours } from '../web/map-style.js';
 
 // A five-way colour code with no key is unreadable, and a key that has drifted from the
 // map is worse than none. Both are built from the same constants; this is what keeps a
@@ -21,4 +21,14 @@ test('the key has no entries the map never paints', () => {
 
 test('every entry is labelled', () => {
   for (const entry of MAP_KEY) assert.ok(entry.label.trim().length > 0);
+});
+
+// The key is only useful if it matches what is drawn. A business is a ring around the
+// basemap's own icon — which is the whole point of the ring, so it must not be shown as
+// a filled dot in the legend.
+test('places are keyed as rings and loose notes as dots', () => {
+  const dots = MAP_KEY.filter((entry) => entry.shape === 'dot');
+  assert.equal(dots.length, 1, 'only the dropped pin is a plain dot');
+  assert.equal(dots[0]!.colour, NOTE_PIN);
+  assert.ok(MAP_KEY.filter((entry) => entry.shape === 'ring').length >= 4);
 });

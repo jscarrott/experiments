@@ -112,12 +112,18 @@ export function renderMapKey(root: HTMLElement): void {
       h('ul', { class: 'list list--plain key', 'data-testid': 'map-key' },
         ...MAP_KEY.map((entry) =>
           h('li', { class: 'key__row' },
-            h('span', { class: 'key__dot', style: `background:${entry.colour}` }),
+            h('span', {
+              class: entry.shape === 'ring' ? 'key__dot key__dot--ring' : 'key__dot',
+              style:
+                entry.shape === 'ring'
+                  ? `border-color:${entry.colour};background:${entry.colour}2e`
+                  : `background:${entry.colour}`,
+            }),
             h('span', { text: entry.label }),
           ),
         ),
       ),
-      h('p', { class: 'muted', text: 'Bigger circles mean more notes about the same place.' }),
+      h('p', { class: 'muted', text: 'A ring marks a business, around whatever the map already shows there. The number beside it is how many notes.' }),
     ),
   );
 }
