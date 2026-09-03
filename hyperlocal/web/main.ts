@@ -4,6 +4,7 @@ import type { Note, PlaceCandidate } from '../shared/types.js';
 import { initAuth, signIn } from './auth.js';
 import { DemoSource, DEMO_HANDLES } from './demo.js';
 import { fill, h, mustFind } from './dom.js';
+import { explainSignInFailure, explainSpaceFailure, type Explained } from './errors.js';
 import { NoteMap } from './map.js';
 import { mountMembers } from './members.js';
 import { nearbyPlaces } from './places-api.js';
@@ -17,7 +18,7 @@ import {
   SpaceSource,
   type UserSession,
 } from './space.js';
-import { boundsToBbox, filterFromQuery, filterToQuery, Store } from './state.js';
+import { boundsToBbox, filterFromQuery, filterToQuery, Store, type AppState } from './state.js';
 import {
   renderCompose,
   renderFilters,
@@ -108,7 +109,7 @@ const handlers = {
       await source.remove(note);
       store.removeNote(note.uri);
     } catch (error) {
-      store.update({ error: `Could not delete: ${(error as Error).message}` });
+      report({ headline: 'Could not delete that note.', detail: (error as Error).message });
     }
   },
   startCompose() {
@@ -154,6 +155,10 @@ function wirePhoneLayout(): void {
   });
 }
 
+function report(explained: Explained, extra: Partial<AppState> = {}): void {
+  store.update({ error: explained.headline, errorDetail: explained.detail ?? null, ...extra });
+}
+
 function syncUrl(): void {
   const query = filterToQuery(store.current.filter);
   const url = new URL(window.location.href);
@@ -168,7 +173,19 @@ store.subscribe((state, derived) => {
 
   const banner = mustFind('#error');
   banner.hidden = state.error === null;
-  banner.textContent = state.error ?? '';
+  if (state.error !== null) {
+    fill(banner,
+      h('span', { class: 'error__text', text: state.error }),
+      // Folded away rather than omitted: nobody wants to read `BadJwt: Invalid delegation
+      // token` on their way to writing a note, and it is the only thing worth pasting
+      // into a bug report.
+      state.errorDetail &&
+        h('details', { class: 'error__detail' },
+          h('summary', { text: 'Details' }),
+          h('code', { text: state.errorDetail }),
+        ),
+    );
+  }
 
   // Closed, the sheet is only its handle, so the handle has to carry the information the
   // list would have shown — otherwise a phone gives no hint that there is anything there.
@@ -299,8 +316,45 @@ async function saveDraft(): Promise<void> {
 // Startup
 // ---------------------------------------------------------------------------
 
-function renderAccount(label: string, live: boolean, onSignIn: (handle: string) => void, spaceLink: string | null): void {
+/**
+ * The three states this can be in, which used to be two.
+ *
+ * Signed in with a broken space used to render as signed out: you had authorised the app,
+ * the error banner said something about DPoP, and the toolbar offered to sign you in
+ * again — which does nothing, because you already are. It now says who you are, and
+ * offers the way out.
+ */
+function renderAccount(
+  label: string,
+  live: boolean,
+  onSignIn: (handle: string) => void,
+  spaceLink: string | null,
+  broken: { handle: string; onSignOut: () => void } | null = null,
+): void {
   const el = mustFind('#account');
+
+  if (!live && broken) {
+    fill(el,
+      h('span', { class: 'badge badge--warn', 'data-testid': 'demo-badge', text: 'showing demo data' }),
+      h('span', { class: 'account__handle', 'data-testid': 'account', text: broken.handle }),
+      h('button', {
+        type: 'button',
+        class: 'link',
+        'data-testid': 'retry',
+        onclick: () => window.location.reload(),
+        text: 'Try again',
+      }),
+      h('button', {
+        type: 'button',
+        class: 'link',
+        'data-testid': 'sign-out',
+        onclick: broken.onSignOut,
+        text: 'Sign out',
+      }),
+    );
+    return;
+  }
+
   if (live) {
     fill(el,
       h('span', { class: 'account__handle', 'data-testid': 'account', text: label }),
@@ -316,9 +370,12 @@ function renderAccount(label: string, live: boolean, onSignIn: (handle: string) 
     return;
   }
 
+  // Not `you.bsky.social`: bsky.social has no spaces support, so the one hint the app
+  // gave was for an account that cannot possibly work here.
   const input = h('input', {
     class: 'input input--inline',
-    placeholder: 'you.bsky.social',
+    placeholder: 'you.example.com',
+    title: 'Your handle on a PDS running the atproto spaces alpha',
     'data-testid': 'handle',
   });
   fill(el,
@@ -371,13 +428,15 @@ async function start(): Promise<void> {
   const onSignIn = (handle: string) => {
     if (!auth || !handle.trim()) return;
     void signIn(auth.client, handle).catch((error) =>
-      store.update({ error: `Sign in failed: ${(error as Error).message}` }),
+      report(explainSignInFailure(error)),
     );
   };
 
   // Any PDS can answer resolveHandle, so the space's own host is as good as anywhere and
   // is already known to be reachable. Null in demo mode, where handles are fixtures.
   let handleService: string | null = null;
+  // Set only in the awkward middle state: authorised, but the space would not open.
+  let broken: { handle: string; onSignOut: () => void } | null = null;
 
   if (auth?.session) {
     // Adapt OAuthSession to UserSession explicitly rather than casting. `fetchHandler`
@@ -411,12 +470,21 @@ async function start(): Promise<void> {
         },
       });
     } catch (error) {
-      store.update({ error: `Could not open the space: ${(error as Error).message}` });
+      report(explainSpaceFailure(error));
+      // Falling back to the fixtures keeps the map and the filters usable, but it must
+      // not read as your own data — hence `broken` below, which says whose account this
+      // is and that what you are looking at is not theirs.
       source = new DemoSource();
+      broken = {
+        handle: handles.get(session.did) ?? shortDid(session.did),
+        onSignOut: () => {
+          void oauth.signOut().finally(() => window.location.reload());
+        },
+      };
     }
   }
 
-  renderAccount(source.label, source.live, onSignIn, inviteLink);
+  renderAccount(source.label, source.live, onSignIn, inviteLink, broken);
 
   try {
     const notes = await source.load();
@@ -425,7 +493,7 @@ async function start(): Promise<void> {
     if (handleService) learnHandles(notes.map((n) => n.author), handleService);
     store.update({ notes, loading: false });
   } catch (error) {
-    store.update({ loading: false, error: `Could not load notes: ${(error as Error).message}` });
+    report(explainSpaceFailure(error), { loading: false });
   }
 }
 

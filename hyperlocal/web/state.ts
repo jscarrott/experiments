@@ -10,6 +10,9 @@ export interface AppState {
   openPlace: string | null;
   loading: boolean;
   error: string | null;
+  /** Technical text behind `error`, shown folded away. Useless to most people, and the
+   *  only thing worth having when something needs reporting. */
+  errorDetail: string | null;
 }
 
 export interface DerivedState {
@@ -40,6 +43,7 @@ export class Store {
     openPlace: null,
     loading: true,
     error: null,
+    errorDetail: null,
   };
   private listeners = new Set<Listener>();
 
