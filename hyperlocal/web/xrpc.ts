@@ -19,7 +19,7 @@ export class XrpcError extends Error {
   }
 }
 
-async function toError(response: Response, nsid: string): Promise<XrpcError> {
+export async function toError(response: Response, nsid: string): Promise<XrpcError> {
   let code = `HTTP${response.status}`;
   let message = response.statusText || 'request failed';
   try {

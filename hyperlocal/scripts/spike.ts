@@ -117,7 +117,14 @@ async function main(): Promise<void> {
   }
 
   step(4, 'bob mints a space credential and reads the whole space');
-  const delegation = await call<{ token: string }>(bob, 'com.atproto.space.getDelegationToken', { space });
+  // A query, so `space` goes in the query string; sent as a body it becomes a POST and
+  // the server answers `Incorrect HTTP method (POST) expected GET`.
+  const delegation = await call<{ token: string }>(
+    bob,
+    'com.atproto.space.getDelegationToken',
+    undefined,
+    { space },
+  );
   const key = await JoseKey.generate(['ES256']);
   const credentialUrl = new URL('/xrpc/com.atproto.space.getSpaceCredential', PDS);
   const credentialResponse = await fetch(credentialUrl, {

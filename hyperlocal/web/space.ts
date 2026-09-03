@@ -4,7 +4,7 @@ import { NOTE_COLLECTION, spaceAuthority } from '../shared/nsid.js';
 import { toNote } from '../shared/note.js';
 import type { Note, NoteRecord } from '../shared/types.js';
 import type { NoteSource } from './source.js';
-import { xrpcGet, xrpcPost, type FetchLike } from './xrpc.js';
+import { toError, xrpcGet, xrpcPost, type FetchLike } from './xrpc.js';
 
 /**
  * A session that can sign XRPC calls as the user. `@atproto/oauth-client-browser`'s
@@ -64,7 +64,11 @@ export async function mintSpaceCredential(
   if (!authority) throw new Error(`not a space ref: ${space}`);
 
   const userPds = session.pdsUrl ?? (await resolvePds(session.did));
-  const { token } = await xrpcPost<{ token: string }>(
+  // A query, not a procedure: the lexicon declares getDelegationToken as `type: query`,
+  // so a POST here comes back as `InvalidRequest: Incorrect HTTP method (POST) expected
+  // GET`. Its sibling getSpaceCredential *is* a procedure, which is what makes the pair
+  // easy to get wrong.
+  const { token } = await xrpcGet<{ token: string }>(
     session.fetchHandler,
     userPds,
     'com.atproto.space.getDelegationToken',
@@ -92,7 +96,11 @@ export async function mintSpaceCredential(
 
   const response = await fetch(request);
   if (!response.ok) {
-    throw new Error(`credential exchange failed: ${response.status}`);
+    // This hop is hand-rolled rather than going through xrpcPost, so it has to do its
+    // own error reporting. A bare status is not enough: the server's message is the
+    // only thing that separates a bad DPoP proof from a delegation token the authority
+    // could not verify, and those have completely different causes.
+    throw await toError(response, 'com.atproto.space.getSpaceCredential');
   }
   const body = (await response.json()) as { credential?: string };
   if (!body.credential) throw new Error('credential exchange returned no credential');

@@ -24,6 +24,7 @@ import {
   type ComposeDraft,
   type ViewerInfo,
 } from './ui.js';
+import { XrpcError } from './xrpc.js';
 
 const DEFAULT_CENTRE: [number, number] = [-2.5975, 51.4529];
 const DEFAULT_ZOOM = 15;
@@ -303,7 +304,18 @@ async function start(): Promise<void> {
   };
 
   if (auth?.session) {
-    const session = auth.session as unknown as UserSession;
+    // Adapt OAuthSession to UserSession explicitly rather than casting. `fetchHandler`
+    // is a prototype method that reads `this.getTokenSet()`, so handing over a bare
+    // reference to it loses `this` and every space call dies on "can't access property
+    // getTokenSet". The structural interface cannot catch that — a method satisfies the
+    // shape whether or not it is bound — so the binding has to be deliberate here.
+    // pdsUrl is left out because OAuthSession has none; space.ts resolves it from the DID.
+    const oauth = auth.session;
+    const session: UserSession = {
+      did: oauth.did,
+      serverMetadata: oauth.serverMetadata,
+      fetchHandler: (input, init) => oauth.fetchHandler(input.toString(), init),
+    };
     try {
       const context = await connectSpace(session);
       source = context.source;
@@ -387,8 +399,19 @@ async function connectSpace(session: UserSession): Promise<SpaceContext> {
   } catch (error) {
     // The most likely first-run failure is simply that you have never made your space.
     if (ownerDid !== session.did) throw error;
-    console.info('[space] no space yet, creating one', error);
-    await createSpace(session, userPds, SPACE_TYPE, SPACE_KEY);
+    console.info('[space] connect failed, trying to create the space', error);
+    try {
+      await createSpace(session, userPds, SPACE_TYPE, SPACE_KEY);
+    } catch (createError) {
+      // The space existing already means creating it was never the fix, so this branch
+      // was a wrong guess and `createError` is noise. Report what actually broke, or a
+      // real bug in the connect path spends the rest of its life disguised as
+      // "Space already exists".
+      if (createError instanceof XrpcError && createError.code === 'SpaceAlreadyExists') {
+        throw error;
+      }
+      throw createError;
+    }
     return connect();
   }
 }

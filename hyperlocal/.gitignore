@@ -4,5 +4,6 @@ dist-e2e/
 test-results/
 playwright-report/
 *.log
-place-proxy/*.sqlite
+# The -wal and -shm siblings appear whenever the proxy has run.
+place-proxy/*.sqlite*
 public/client-metadata.json
