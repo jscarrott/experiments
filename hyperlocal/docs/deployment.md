@@ -161,6 +161,9 @@ services:
     # Loopback only: Tailscale is the only thing that should be able to reach it.
     ports:
       - "127.0.0.1:3000:3000"
+    # Not optional on a tailnet — see "Three ways the tailnet bites the PDS" below.
+    dns:
+      - 100.100.100.100
     volumes:
       - type: bind
         source: /pds
@@ -200,6 +203,62 @@ needs no `sudo` at any point. It is also the better choice on a single-user desk
 image runs as its `node` user, which is uid 1000, so on a machine whose first user is also
 uid 1000 the data files come out owned by you and stay readable for backup without `sudo`.
 
+### Three ways the tailnet bites the PDS
+
+Tailscale is the cheapest way to get a real hostname and a real certificate, and the price
+is paid here. All three of these look like bugs in the alpha and are not; each one cost an
+afternoon.
+
+**1. The container has no DNS.** On a machine where Tailscale runs the resolver, the host's
+`/etc/resolv.conf` lists only `100.100.100.100` (and its IPv6 twin). Docker will not carry
+a CGNAT nameserver into a bridge network, so it silently hands the container an embedded
+resolver with no upstream at all:
+
+```
+$ docker exec pds cat /etc/resolv.conf
+nameserver 127.0.0.11
+# Based on host file: '/etc/resolv.conf' (internal resolver)
+# NO EXTERNAL NAMESERVERS DEFINED
+```
+
+The PDS starts, serves, and authenticates perfectly — and then cannot resolve
+`plc.directory`, so every DID resolution hangs until an internal three-second abort. What
+surfaces is `401 BadJwt: Invalid delegation token: This operation was aborted` on
+`getSpaceCredential`, which reads like a signature problem and is a DNS problem. The
+three-second `responseTime` in the PDS log is the tell.
+
+Naming the resolver explicitly in the compose file fixes it, and `100.100.100.100` is the
+right one to name rather than a public resolver: it answers for MagicDNS *and* forwards
+public queries, and the PDS needs both — public DNS for `plc.directory` and handle
+verification, MagicDNS for its own `ts.net` hostname.
+
+```bash
+# Confirm before and after:
+docker exec pds wget -qO- https://plc.directory/did:plc:…
+```
+
+**2. SSRF protection rejects the whole tailnet.** The PDS refuses to fetch a hostname that
+resolves outside the public unicast ranges, and every tailnet address is in `100.64.0.0/10`
+— CGNAT space, which the check treats as non-routable. It fails with `Hostname resolved to
+non-unicast address`. There is no allowlist, only the blunt switch:
+
+```
+PDS_DISABLE_SSRF_PROTECTION=true
+```
+
+That turns the protection off *entirely*, so the PDS will follow a request to any address
+it can reach, including the rest of your tailnet and your LAN. On a single-user desktop
+whose PDS is only reachable over Serve that is a defensible trade, but it is a real one —
+make it deliberately, and reverse it the moment the PDS moves to a public hostname (Option
+B), where it is neither needed nor wise.
+
+**3. TLS is three gates deep**, as above. Two of them are tailnet-wide admin console
+toggles, not machine-local settings.
+
+None of this applies to Option B. A VM with a public hostname resolves DNS normally, sits
+in public unicast space, and gets its certificate from Caddy — which is the honest argument
+for moving to one eventually, beyond uptime.
+
 ### Accounts, and why the order matters
 
 You cannot write the `_atproto` TXT record until the DID exists, and the DID does not exist
@@ -236,8 +295,10 @@ final name and adding DNS afterwards is the whole procedure.
 4. **Family need Tailscale** under Serve. If that is a problem, use Funnel and accept the
    public exposure.
 
-> **Partly verified**, on `john-desktop`, 1 September 2026. Run as far as a PDS serving on
-> loopback; not yet as far as an account.
+> **Verified end to end**, on `john-desktop`, 3 September 2026: TLS through Serve, account
+> creation, handle resolution through DNS, lexicon publication, OAuth sign-in from the app,
+> and a space opened through a minted credential. `npm run spike` is still outstanding — it
+> needs a second account.
 >
 > **Verified.** The pinned digest `813a08fe…` is still what the `pds-spaces-alpha` tag
 > resolves to, and it publishes an amd64 manifest and nothing else. The image is the
@@ -249,10 +310,10 @@ final name and adding DNS afterwards is the whole procedure.
 > `PDS_SERVICE_HANDLE_DOMAINS` takes effect as `availableUserDomains`, and the admin
 > password authenticates against `com.atproto.server.createInviteCode`.
 >
-> **Still unverified.** Everything from TLS onwards: `tailscale serve`, account creation,
-> handle resolution through DNS, OAuth sign-in from the app, and `npm run spike`. Read the
-> container's startup logs rather than assuming a silent failure is normal — the one
-> failure met so far was a hard exit at startup, not a degraded service.
+> **Read the logs.** Every failure past the first was silent or misdirected on the client
+> side and stated plainly in `docker logs pds`: the DNS timeout arrives as a signature
+> error, the SSRF refusal as a hostname error, and the missing lexicons as a scope error.
+> None of the three is what the browser says it is.
 
 ---
 
@@ -318,7 +379,50 @@ one, before anyone writes anything they would miss.
 
 ---
 
-## Stage 3 — the gate, before anyone is invited
+## Stage 3 — publish the lexicons (or nobody can sign in)
+
+This is not cosmetic, and the rest of these docs used to say it was. **`space?` scopes do
+not work until the lexicons resolve.** The authorization server parses the scope, tries to
+resolve `com.jscarrott.hyperlocal.space` to find out what it is, fails, and rejects the
+whole request as `invalid_scope`. What you see in the app is a sign-in that bounces
+straight back with no useful message; what you see in the PDS log is the real cause:
+
+```
+queryTxt ENOTFOUND _lexicon.hyperlocal.jscarrott.com
+```
+
+Two things are needed, and neither is the app's own deploy.
+
+1. **A TXT record naming the authority's DID.** The authority is the NSID minus its final
+   segment, reversed — so `com.jscarrott.hyperlocal.note` resolves via
+   **`_lexicon.hyperlocal.jscarrott.com`**, not the bare apex. At Hover the hostname field
+   takes the name relative to the domain, so enter `_lexicon.hyperlocal`, not the FQDN;
+   typing the whole thing gets you `_lexicon.hyperlocal.jscarrott.com.jscarrott.com`.
+
+   ```
+   _lexicon.hyperlocal   TXT   did=did:plc:…
+   ```
+
+2. **The schemas, published as records.** Each file in `lexicons/` goes into the
+   authority account's repo as a `com.atproto.lexicon.schema` record whose rkey is the
+   NSID:
+
+   ```
+   com.atproto.lexicon.schema/com.jscarrott.hyperlocal.note
+   com.atproto.lexicon.schema/com.jscarrott.hyperlocal.space
+   com.atproto.lexicon.schema/com.jscarrott.hyperlocal.permissions
+   ```
+
+The DID in the TXT record and the account holding the records must be the same one, and
+that account has to be on a PDS the authorization server can reach — which on a tailnet
+means Stage 2's DNS fix is already in place.
+
+Sign-in working is the check. The consent screen showing **Hyperlocal** rather than a raw
+scope string is the bonus, and the only part that was ever cosmetic.
+
+---
+
+## Stage 4 — the gate, before anyone is invited
 
 ```bash
 PDS_URL=https://pds.jscarrott.com \
@@ -337,7 +441,7 @@ on those last two assertions, and they have never been run against a live PDS.
 
 ---
 
-## Stage 4 — the OSM proxy (optional, do it last)
+## Stage 5 — the OSM proxy (optional, do it last)
 
 Without it the app skips place lookups entirely and every note gets a plain pin. Everything
 else — map, notes, filters, per-business grouping of notes that already have an OSM id —
@@ -362,7 +466,7 @@ the caching, which are the parts Overpass actually cares about.
 
 ---
 
-## Stage 5 — bring the family in
+## Stage 6 — bring the family in
 
 1. Sign in at `hyperlocal.jscarrott.com` with your handle. On first run the app creates
    your space.

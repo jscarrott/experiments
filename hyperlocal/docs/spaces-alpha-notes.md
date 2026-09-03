@@ -106,14 +106,20 @@ the first thing to run once accounts exist.
 ## Scopes
 
 Bulletin asks for `include:my.bulletin.permissions` — a `"type": "permission-set"`
-lexicon it publishes, which gives a friendlier consent screen. That only works once the
-lexicon is resolvable: a `_lexicon.<authority>` TXT record holding `did=…`, and the
-schemas published as `com.atproto.lexicon.schema` records keyed by NSID.
+lexicon it publishes, which gives a friendlier consent screen. That part needs the
+lexicon resolvable: a `_lexicon.<authority>` TXT record holding `did=…`, and the schemas
+published as `com.atproto.lexicon.schema` records keyed by NSID.
 
 The authority is the NSID minus its final segment, reversed — so
 `com.jscarrott.hyperlocal.note` resolves via **`_lexicon.hyperlocal.jscarrott.com`**, not
-via the bare apex. That is a DNS record and a set of published records, neither of which
-exists yet, so the raw scope syntax is used instead. It needs nothing published:
+via the bare apex.
+
+**Publishing is not optional, and this section used to claim it was.** The raw scope
+syntax below avoids `include:`, but it still names three NSIDs, and the authorization
+server resolves every one of them before granting anything. With nothing published, PAR
+succeeds and the authorize request fails as `invalid_scope`; the PDS log gives the real
+reason, `queryTxt ENOTFOUND _lexicon.hyperlocal.jscarrott.com`. So the raw syntax buys a
+simpler consent screen, not a shorter setup:
 
 ```
 atproto

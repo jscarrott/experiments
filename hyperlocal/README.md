@@ -151,11 +151,14 @@ the namespace after anyone has written a note orphans every existing record unde
 collection the app no longer reads. It was moved from the placeholder `xyz.hyperlocal` to
 `com.jscarrott.hyperlocal` before any real note existed, for exactly that reason.
 
-That also puts lexicon resolution within reach: the authority is the NSID minus its final
-segment, reversed, so `com.jscarrott.hyperlocal.note` resolves via
-`_lexicon.hyperlocal.jscarrott.com` — a TXT record holding `did=…`, plus the schemas
-published as `com.atproto.lexicon.schema` records. Doing that would let the OAuth consent
-screen show the permission set's title instead of a raw scope string.
+It also decides where the lexicons have to be published, which is **required** rather
+than a nicety: the authorization server resolves every NSID in a `space?` scope before it
+will grant anything, so until they resolve, sign-in fails with `invalid_scope`. The
+authority is the NSID minus its final segment, reversed, so
+`com.jscarrott.hyperlocal.note` resolves via `_lexicon.hyperlocal.jscarrott.com` — a TXT
+record holding `did=…`, plus the schemas published as `com.atproto.lexicon.schema`
+records. `docs/deployment.md` Stage 3 is the procedure. Only the friendlier consent
+screen, showing the permission set's title instead of a raw scope string, is cosmetic.
 
 ## Layout
 
