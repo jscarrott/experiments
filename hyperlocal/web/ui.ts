@@ -114,7 +114,9 @@ export function renderList(
   const notes = derived.visible;
   fill(root, 
     h('div', { class: 'panel' },
-      h('div', { class: 'row' },
+      // Classed so a phone can drop it: the bottom sheet's own handle already says
+      // "7 notes in view", and showing that twice, six pixels apart, reads as a bug.
+      h('div', { class: 'row list__head' },
         h('h2', { class: 'panel__heading grow', text: 'In view' }),
         h('span', { class: 'count', 'data-testid': 'visible-count', text: String(notes.length) }),
       ),

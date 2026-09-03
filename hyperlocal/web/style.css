@@ -8,6 +8,7 @@
   --accent: #5ad1a8;
   --error: #e05a5a;
   --radius: 6px;
+  --sheet-peek: 44px;
   --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -28,17 +29,26 @@ body { background: var(--bg); color: var(--text); font: 13px/1.5 var(--font); ov
 .account__handle { color: var(--text-dim); }
 
 .workspace { flex: 1; display: grid; grid-template-columns: 260px 1fr 340px; min-height: 0; }
-.viewport { position: relative; min-width: 0; background: #14161c; }
+.viewport { position: relative; min-width: 0; overflow: hidden; background: #14161c; }
 #map { position: absolute; inset: 0; }
+/* Sits on top of the basemap, so it cannot borrow the panel background and cannot rely
+   on a text shadow either — the tiles are light and the shadow was tuned for dark. Its
+   own chip is the only thing that makes it legible over both. */
 .help {
-  position: absolute; left: 12px; bottom: 28px; margin: 0;
-  color: var(--text-faint); font-size: 11px; pointer-events: none;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  position: absolute; left: 12px; bottom: 28px; margin: 0; padding: 4px 8px;
+  color: var(--text-dim); font-size: 11px; pointer-events: none;
+  background: rgba(15, 17, 22, 0.82); border: 1px solid var(--line);
+  border-radius: var(--radius); backdrop-filter: blur(2px);
 }
 
 .sidebar { overflow-y: auto; background: var(--panel); display: flex; flex-direction: column; }
 .sidebar--left { border-right: 1px solid var(--line); }
 .sidebar--right { border-left: 1px solid var(--line); }
+
+.toolbar__panel-toggle { display: none; }
+.scrim { display: none; }
+.sheet__handle { display: none; }
+.sheet__body { display: contents; }
 
 .panel { padding: 12px 12px 14px; }
 .panel + .panel { border-top: 1px solid var(--line); }
@@ -102,7 +112,72 @@ body { background: var(--bg); color: var(--text); font: 13px/1.5 var(--font); ov
 
 .compose { border-bottom: 1px solid var(--line); }
 
+/* Phones. The map stops being one row among three and becomes the whole surface, with
+   both sidebars floating over it: filters as a slide-over from the left, notes as a
+   bottom sheet. The old layout stacked filters above a 300px map, so reaching the map —
+   the entire point of the app, and the thing you are looking at while stood outside the
+   shop — meant scrolling past every control first. */
 @media (max-width: 900px) {
-  .workspace { grid-template-columns: 1fr; grid-template-rows: auto 300px auto; }
-  .sidebar { max-height: 40vh; }
+  .toolbar { padding: 6px 10px; gap: 8px; }
+  .toolbar__sub { display: none; }
+  .toolbar__panel-toggle { display: inline-block; }
+
+  .workspace { position: relative; grid-template-columns: 1fr; grid-template-rows: 1fr; }
+  .viewport { grid-area: 1 / 1; }
+  .help { bottom: calc(var(--sheet-peek) + 12px); right: 12px; }
+
+  /* Driven by the open state, never by the `hidden` attribute: a `display: block` here
+     would beat `[hidden]`'s default `display: none`, leaving an invisible sheet of glass
+     over the whole map that swallows every tap. */
+  .workspace[data-filters='open'] .scrim {
+    display: block; position: absolute; inset: 0; z-index: 15;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  .sidebar--left {
+    position: absolute; inset: 0 auto 0 0; z-index: 20;
+    width: min(320px, 86vw); transform: translateX(-100%);
+    transition: transform 0.18s ease;
+  }
+  .workspace[data-filters='open'] .sidebar--left { transform: none; }
+
+  .sidebar--right {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 10;
+    max-height: 82%; border-left: 0; border-top: 1px solid var(--line);
+    border-radius: 12px 12px 0 0; overflow: hidden;
+    /* Peeking rather than hidden: the handle doubles as the count, so the sheet says
+       how many notes are in view without being opened. */
+    transform: translateY(calc(100% - var(--sheet-peek)));
+    transition: transform 0.18s ease;
+  }
+  .workspace[data-sheet='open'] .sidebar--right { transform: none; }
+
+  .sheet__handle {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    flex: none; width: 100%; height: var(--sheet-peek); padding: 8px 12px;
+    background: var(--panel); border: 0; color: var(--text); font: inherit;
+    font-weight: 600; cursor: pointer;
+  }
+  .sheet__grip {
+    width: 36px; height: 4px; border-radius: 999px; background: var(--line);
+  }
+  .sheet__body { display: flex; flex-direction: column; overflow-y: auto; }
+  .list__head { display: none; }
+
+  /* The sheet's peek covers the bottom of the map, and the OpenStreetMap attribution
+     lives down there. Lift MapLibre's bottom corners clear of it — the attribution is a
+     condition of using the tiles, not decoration, so it must stay visible with the sheet
+     closed. The help line then sits above whatever those corners hold. */
+  /* Scoped through .viewport purely to outrank maplibre-gl.css, which sets `bottom: 0`
+     at the same specificity and is injected after this file. */
+  .viewport .maplibregl-ctrl-bottom-left,
+  .viewport .maplibregl-ctrl-bottom-right { bottom: var(--sheet-peek); }
+  .help { bottom: calc(var(--sheet-peek) + 56px); }
+}
+
+/* Coarse pointers need a bigger target than a 13px line of text, whatever the width. */
+@media (pointer: coarse) {
+  .button { padding: 9px 14px; }
+  .chip { padding: 6px 11px; }
+  .toggle { padding: 7px 0; }
 }

@@ -1,4 +1,9 @@
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap, type MapMouseEvent } from 'maplibre-gl';
+// MapLibre ships its controls unstyled unless this is imported. Without it the zoom and
+// geolocate buttons render as bare grey boxes, and — worse — the attribution is not
+// positioned at all, so it lays itself across whatever follows the map in the document.
+// Nothing errors; it just looks broken in a way that reads as a layout bug.
+import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Note, PlaceCandidate, PlaceGroup } from '../shared/types.js';
 
 /**

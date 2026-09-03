@@ -117,6 +117,43 @@ const handlers = {
   },
 };
 
+/**
+ * The two floating panels a phone gets instead of side-by-side sidebars.
+ *
+ * State lives in data attributes on the workspace so the CSS owns every transition and
+ * this only has to flip a string. On a desktop the media query never matches, the
+ * controls are `display: none`, and none of it does anything.
+ */
+function setPanel(name: 'filters' | 'sheet', open: boolean): void {
+  const workspace = mustFind('#workspace');
+  const toggle = mustFind(name === 'filters' ? '#toggle-filters' : '#sheet-handle');
+  workspace.dataset[name] = open ? 'open' : 'closed';
+  toggle.setAttribute('aria-expanded', String(open));
+}
+
+function isPanelOpen(name: 'filters' | 'sheet'): boolean {
+  return mustFind('#workspace').dataset[name] === 'open';
+}
+
+function wirePhoneLayout(): void {
+  setPanel('filters', false);
+  setPanel('sheet', false);
+
+  mustFind('#toggle-filters').addEventListener('click', () =>
+    setPanel('filters', !isPanelOpen('filters')),
+  );
+  mustFind('#sheet-handle').addEventListener('click', () =>
+    setPanel('sheet', !isPanelOpen('sheet')),
+  );
+  mustFind('#scrim').addEventListener('click', () => setPanel('filters', false));
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (isPanelOpen('filters')) setPanel('filters', false);
+    else if (isPanelOpen('sheet')) setPanel('sheet', false);
+  });
+}
+
 function syncUrl(): void {
   const query = filterToQuery(store.current.filter);
   const url = new URL(window.location.href);
@@ -132,6 +169,15 @@ store.subscribe((state, derived) => {
   const banner = mustFind('#error');
   banner.hidden = state.error === null;
   banner.textContent = state.error ?? '';
+
+  // Closed, the sheet is only its handle, so the handle has to carry the information the
+  // list would have shown — otherwise a phone gives no hint that there is anything there.
+  const count = derived.visible.length;
+  mustFind('#sheet-label').textContent = state.loading
+    ? 'Loading…'
+    : count === 0
+      ? 'No notes in view'
+      : `${count} note${count === 1 ? '' : 's'} in view`;
 });
 
 // ---------------------------------------------------------------------------
@@ -177,6 +223,11 @@ async function openCompose(lat: number, lng: number, picked: PlaceCandidate | nu
     saving: false,
   };
   drawCompose();
+  // Compose lives inside the sheet, so on a phone it would otherwise open below the fold
+  // — you would tap the map and appear to get nothing. Also close the filter panel,
+  // which covers the map you just picked a point on.
+  setPanel('sheet', true);
+  setPanel('filters', false);
 
   // The one and only Overpass call: when someone has actually chosen a spot. Never on
   // pan or zoom, which would burn the public instance's daily budget in a minute.
@@ -307,6 +358,7 @@ async function start(): Promise<void> {
 
   store.update({ filter: filterFromQuery(window.location.search) });
   mustFind('#add-note').addEventListener('click', () => handlers.startCompose());
+  wirePhoneLayout();
 
   let auth: Awaited<ReturnType<typeof initAuth>> | null = null;
   try {

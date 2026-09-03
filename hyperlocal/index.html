@@ -13,24 +13,55 @@
           <span class="toolbar__title">Hyperlocal</span>
           <span class="toolbar__sub">Place notes, shared only with your people</span>
         </div>
+        <button
+          type="button"
+          class="button toolbar__panel-toggle"
+          id="toggle-filters"
+          aria-expanded="false"
+          aria-controls="filters-panel"
+          data-testid="toggle-filters"
+        >Filters</button>
         <button type="button" class="button" id="add-note" data-testid="add-note">Add a note here</button>
         <div class="account" id="account"></div>
       </header>
 
       <p class="error" id="error" hidden></p>
 
-      <main class="workspace">
-        <aside class="sidebar sidebar--left">
+      <main class="workspace" id="workspace">
+        <!-- Only ever visible on narrow screens with the filter panel open, where the
+             left sidebar slides over the map rather than sitting beside it. Its
+             visibility is the stylesheet's job; see the note against .scrim. -->
+        <div class="scrim" id="scrim"></div>
+
+        <aside class="sidebar sidebar--left" id="filters-panel">
           <div id="filters"></div>
           <div id="members"></div>
         </aside>
+
         <div class="viewport">
           <div id="map"></div>
           <p class="help">Tap a business to write about it, or anywhere else to drop a pin.</p>
         </div>
-        <aside class="sidebar sidebar--right">
-          <div id="compose" hidden></div>
-          <div id="list"></div>
+
+        <aside class="sidebar sidebar--right" id="sheet">
+          <!-- The grab handle for the bottom sheet on a phone. It is a real button so it
+               is reachable by keyboard and announces its state; on a desktop it is simply
+               not displayed, and the sidebar behaves as it always has. -->
+          <button
+            type="button"
+            class="sheet__handle"
+            id="sheet-handle"
+            aria-expanded="false"
+            aria-controls="sheet-body"
+            data-testid="sheet-handle"
+          >
+            <span class="sheet__grip" aria-hidden="true"></span>
+            <span class="sheet__label" id="sheet-label">Notes</span>
+          </button>
+          <div class="sheet__body" id="sheet-body">
+            <div id="compose" hidden></div>
+            <div id="list"></div>
+          </div>
         </aside>
       </main>
     </div>
