@@ -52,3 +52,19 @@ export function paintedColours(): string[] {
   walk(placeCircleColour());
   return [...found];
 }
+
+/**
+ * Does a basemap POI refer to the same business a note is about?
+ *
+ * Name is all there is to go on: the OpenMapTiles poi schema carries no OSM id, which is
+ * the same gap that makes a tile pick unidentifiable until the proxy answers. Matching is
+ * therefore deliberately strict — case and surrounding space are noise, everything else is
+ * signal. A loose match would snap a note onto the wrong shop, which is worse than not
+ * snapping at all.
+ */
+export function matchesPlaceName(poiName: unknown, placeName: string | undefined): boolean {
+  if (typeof poiName !== 'string' || !placeName) return false;
+  const a = poiName.trim().toLowerCase();
+  const b = placeName.trim().toLowerCase();
+  return a.length > 0 && a === b;
+}

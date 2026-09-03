@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAP_KEY, NOTE_PIN, paintedColours } from '../web/map-style.js';
+import { MAP_KEY, matchesPlaceName, NOTE_PIN, paintedColours } from '../web/map-style.js';
 
 // A five-way colour code with no key is unreadable, and a key that has drifted from the
 // map is worse than none. Both are built from the same constants; this is what keeps a
@@ -31,4 +31,18 @@ test('places are keyed as rings and loose notes as dots', () => {
   assert.equal(dots.length, 1, 'only the dropped pin is a plain dot');
   assert.equal(dots[0]!.colour, NOTE_PIN);
   assert.ok(MAP_KEY.filter((entry) => entry.shape === 'ring').length >= 4);
+});
+
+// Snapping a marker onto the basemap's own POI has only the name to match on — the
+// OpenMapTiles poi schema carries no OSM id. A loose match would move a note onto the
+// wrong shop, which is worse than leaving it where it was.
+test('a place matches its basemap POI only on an exact name, ignoring case and space', () => {
+  assert.ok(matchesPlaceName('The Old Anchor', 'The Old Anchor'));
+  assert.ok(matchesPlaceName('  the old anchor  ', 'The Old Anchor'));
+  assert.ok(!matchesPlaceName('The Old Anchor Inn', 'The Old Anchor'));
+  assert.ok(!matchesPlaceName('Anchor', 'The Old Anchor'));
+  assert.ok(!matchesPlaceName('', 'The Old Anchor'));
+  assert.ok(!matchesPlaceName('The Old Anchor', undefined));
+  assert.ok(!matchesPlaceName(undefined, 'The Old Anchor'));
+  assert.ok(!matchesPlaceName(42, 'The Old Anchor'));
 });

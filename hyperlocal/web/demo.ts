@@ -12,6 +12,9 @@ const STORAGE_KEY = 'hyperlocal.demo.notes';
  * opinions about actual named premises would be putting made-up reviews of real
  * traders into the world, which is not a thing to do casually even in a fixture.
  * The coordinates are real streets in central Bristol so the map looks like a place.
+ * Notes about the same business share one coordinate, because that is what the app
+ * writes: saveDraft stores the place's position rather than wherever you were standing.
+ * Scattering them put the group's marker between its notes instead of on the place.
  */
 const DEMO_AUTHORS = {
   alice: 'did:plc:demo-alice',
@@ -42,9 +45,9 @@ const bakery = { osmType: 'node' as const, osmId: '900000003', name: 'Bridge Str
 
 const SEEDS: Seed[] = [
   { author: DEMO_AUTHORS.alice, text: 'Good coffee, bad food. Get a pastry from the bakehouse first and just have the flat white here.', lat: 51.4529, lng: -2.5975, rating: 4, tags: ['coffee'], place: granary, daysAgo: 3 },
-  { author: DEMO_AUTHORS.bob, text: 'Agree on the coffee. Wifi is unusable after about 4pm though, too many people.', lat: 51.4529, lng: -2.5976, rating: 3, tags: ['coffee', 'wifi'], place: granary, daysAgo: 1 },
+  { author: DEMO_AUTHORS.bob, text: 'Agree on the coffee. Wifi is unusable after about 4pm though, too many people.', lat: 51.4529, lng: -2.5975, rating: 3, tags: ['coffee', 'wifi'], place: granary, daysAgo: 1 },
   { author: DEMO_AUTHORS.chris, text: 'Sunday roast is genuinely excellent, but book — we got turned away twice.', lat: 51.4541, lng: -2.5951, rating: 5, tags: ['dinner'], place: anchor, daysAgo: 12 },
-  { author: DEMO_AUTHORS.alice, text: 'Went back. Still excellent. The pie is better than the roast.', lat: 51.4541, lng: -2.5952, rating: 5, tags: ['dinner'], place: anchor, daysAgo: 5 },
+  { author: DEMO_AUTHORS.alice, text: 'Went back. Still excellent. The pie is better than the roast.', lat: 51.4541, lng: -2.5951, rating: 5, tags: ['dinner'], place: anchor, daysAgo: 5 },
   { author: DEMO_AUTHORS.bob, text: 'Sourdough sells out by 10am on a Saturday. Weekdays are fine.', lat: 51.4515, lng: -2.5993, rating: 4, tags: ['bread'], place: bakery, daysAgo: 20 },
   { author: DEMO_AUTHORS.chris, text: 'Bench here gets the sun until about six. Good spot to wait for the ferry.', lat: 51.4496, lng: -2.6008, tags: ['outdoors'], daysAgo: 8 },
   { author: DEMO_AUTHORS.alice, text: 'Car park machine only takes coins and there is no signal to use the app. Bring change.', lat: 51.4552, lng: -2.6021, rating: 1, tags: ['parking'], daysAgo: 30 },

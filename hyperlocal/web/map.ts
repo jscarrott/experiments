@@ -4,7 +4,8 @@ import maplibregl, { type GeoJSONSource, type Map as MapLibreMap, type MapMouseE
 // positioned at all, so it lays itself across whatever follows the map in the document.
 // Nothing errors; it just looks broken in a way that reads as a layout bug.
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { NOTE_PIN, placeCircleColour } from './map-style.js';
+import { matchesPlaceName, NOTE_PIN, placeCircleColour } from './map-style.js';
+import { distanceMetres } from '../shared/geo.js';
 import type { Note, PlaceCandidate, PlaceGroup } from '../shared/types.js';
 
 /**
@@ -17,6 +18,14 @@ const STYLE_URL = import.meta.env.VITE_MAP_STYLE ?? 'https://tiles.openfreemap.o
 
 const NOTES_SOURCE = 'hyperlocal-notes';
 const POI_SOURCE_LAYER = 'poi';
+
+/**
+ * How far a basemap POI may be from a note's stored position and still be taken for the
+ * same place. Overpass and the tile builder derive their coordinates from the same OSM
+ * element by different routes, so a few tens of metres is normal; beyond that it is more
+ * likely a different branch of the same chain, and snapping would be a lie.
+ */
+const SNAP_METRES = 90;
 
 /** The zoom below which the tiles carry no POIs at all, per the OpenMapTiles schema. */
 export const POI_MIN_ZOOM = 14;
@@ -164,17 +173,44 @@ export class NoteMap {
         'circle-stroke-opacity': 0.95,
       },
     });
+    // Two label layers, because a snapped marker and a floating one want opposite
+    // behaviour from MapLibre's symbol collision.
+    //
+    // Unsnapped: the basemap is not naming this place, so ours must, and it takes part in
+    // collision like any other label.
     this.map.addLayer({
       id: 'place-labels',
       type: 'symbol',
       source: NOTES_SOURCE,
-      filter: ['==', ['get', 'kind'], 'place'],
+      filter: ['all', ['==', ['get', 'kind'], 'place'], ['!', ['get', 'snapped']]],
       layout: {
         'text-field': ['get', 'label'],
         'text-size': 11,
         'text-offset': [0, 1.9],
         'text-anchor': 'top',
         'text-allow-overlap': false,
+      },
+      paint: {
+        'text-color': '#e6e9f0',
+        'text-halo-color': '#11131a',
+        'text-halo-width': 1.4,
+      },
+    });
+    // Snapped: the count sits beside the basemap's own icon. It must not join collision
+    // at all — our layer is on top, so it would win and suppress the very icon and label
+    // it was moved here to sit next to, which is exactly the thing worth keeping.
+    this.map.addLayer({
+      id: 'place-counts',
+      type: 'symbol',
+      source: NOTES_SOURCE,
+      filter: ['all', ['==', ['get', 'kind'], 'place'], ['get', 'snapped']],
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-size': 11,
+        'text-offset': [1.4, 0],
+        'text-anchor': 'left',
+        'text-allow-overlap': true,
+        'text-ignore-placement': true,
       },
       paint: {
         'text-color': '#e6e9f0',
@@ -209,16 +245,20 @@ export class NoteMap {
     const features: GeoJSON.Feature[] = [];
 
     for (const group of groups) {
+      const at = this.snapToPoi(group.lat, group.lng, group.place.name);
       features.push({
         type: 'Feature',
-        geometry: { type: 'Point', coordinates: [group.lng, group.lat] },
+        geometry: { type: 'Point', coordinates: [at.lng, at.lat] },
         properties: {
           kind: 'place',
           key: group.key,
+          snapped: at.snapped,
           // The count used to live only in the circle's radius, which nobody can read off
-          // a map. Naming it costs one character of clutter for a place with one note.
-          label:
-            group.notes.length > 1
+          // a map. When we have snapped onto the basemap's own POI, the map is already
+          // printing the name right there, so ours says only what the map cannot know.
+          label: at.snapped
+            ? String(group.notes.length)
+            : group.notes.length > 1
               ? `${group.place.name ?? 'Unnamed place'} · ${group.notes.length}`
               : (group.place.name ?? 'Unnamed place'),
           count: group.notes.length,
@@ -238,6 +278,54 @@ export class NoteMap {
     }
 
     source.setData({ type: 'FeatureCollection', features });
+  }
+
+  /**
+   * Move a place marker onto the basemap's own POI for the same business, when it is
+   * drawing one.
+   *
+   * A group sits at the mean of its notes' positions, and a note about a business is
+   * stored at the coordinates the place proxy gave — which come from Overpass, while the
+   * icon on screen is placed by the tile builder. They are derived from the same OSM
+   * element but they are not the same number, so a ring meant to encircle an icon lands
+   * beside it instead. Asking the map where it actually drew the thing is the only way to
+   * be sure, and it costs one query over features already rendered.
+   *
+   * Falls through unchanged when the tiles carry no POIs at this zoom, when the place has
+   * no name to match on, or when nothing matches.
+   */
+  private snapToPoi(lat: number, lng: number, name: string | undefined): { lat: number; lng: number; snapped: boolean } {
+    const miss = { lat, lng, snapped: false };
+    if (!name || this.poiLayers.length === 0 || this.map.getZoom() < POI_MIN_ZOOM) return miss;
+
+    // The search radius is a distance on the ground, not a number of pixels. A fixed
+    // pixel box is a different size at every zoom: 44px is half a street at z15 and a
+    // shopfront at z19, so a marker would snap when you were zoomed out and let go of the
+    // icon as you zoomed in, which is the one moment you are looking closely.
+    const at = this.map.project([lng, lat]);
+    const perDegreeLat = Math.abs(at.y - this.map.project([lng, lat + 0.001]).y) / 0.001;
+    const pad = Math.min(Math.max((SNAP_METRES / 111_320) * perDegreeLat, 8), 600);
+
+    const found = this.map.queryRenderedFeatures(
+      [
+        [at.x - pad, at.y - pad],
+        [at.x + pad, at.y + pad],
+      ],
+      { layers: this.poiLayers },
+    );
+
+    // Nearest wins, because a high street can hold two branches of the same chain.
+    let best: { lat: number; lng: number; away: number } | null = null;
+    for (const feature of found) {
+      if (!matchesPlaceName(feature.properties?.name, name)) continue;
+      if (feature.geometry.type !== 'Point') continue;
+      const [poiLng, poiLat] = feature.geometry.coordinates;
+      if (typeof poiLng !== 'number' || typeof poiLat !== 'number') continue;
+      const away = distanceMetres(lat, lng, poiLat, poiLng);
+      if (away > SNAP_METRES) continue;
+      if (!best || away < best.away) best = { lat: poiLat, lng: poiLng, away };
+    }
+    return best ? { lat: best.lat, lng: best.lng, snapped: true } : miss;
   }
 
   /**
