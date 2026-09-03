@@ -138,8 +138,23 @@ interface RepoListing {
 }
 
 interface RecordListing {
-  records: { uri: string; cid: string; value: unknown }[];
+  // No `uri`, unlike every unpermissioned listing and unlike createRecord's own result.
+  // A space record is addressed by the space it lives in plus repo/collection/rkey, and
+  // the listing returns exactly those parts and leaves assembling them to the caller.
+  records: { collection: string; rkey: string; cid: string; value?: unknown }[];
   cursor?: string;
+}
+
+/**
+ * The at:// URI of a record inside a space.
+ *
+ * `<space-ref>/<repo did>/<collection>/<rkey>` — deeper than an ordinary record URI,
+ * because the space is part of the address rather than implied by the repo. Matches what
+ * com.atproto.space.createRecord hands back for the same record, which is what makes a
+ * note written this session and the same note re-read next session compare equal.
+ */
+function spaceRecordUri(space: string, repo: string, collection: string, rkey: string): string {
+  return `${space}/${repo}/${collection}/${rkey}`;
 }
 
 /**
@@ -188,7 +203,12 @@ export async function syncSpace(
         for (const record of page.records ?? []) {
           // Validated here, not trusted: a space grants access, not trust, and a
           // member's client can write anything at all into their own repo.
-          const note = toNote(record.uri, record.cid, did, record.value);
+          const note = toNote(
+            spaceRecordUri(space, did, record.collection, record.rkey),
+            record.cid,
+            did,
+            record.value,
+          );
           if (note) notes.push(note);
           else invalid++;
         }

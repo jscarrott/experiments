@@ -113,3 +113,14 @@ test('toNote returns null for a record another member wrote badly', () => {
   assert.equal(toNote('at://x', 'bafy', 'did:plc:a', { text: 'no location' }), null);
   assert.equal(toNote('at://x', 'bafy', 'did:plc:a', 'not an object'), null);
 });
+
+// com.atproto.space.listRecords returns collection/rkey/cid and no uri, while
+// createRecord returns an assembled uri — so a caller that reads one and writes the
+// other gets `undefined` past the type checker. Every note then shares an identity, and
+// deleting one deletes whichever the lookup happened to find first.
+test('a record with no identity is rejected rather than made into a note', () => {
+  const value = good;
+  assert.equal(toNote(undefined as unknown as string, 'bafy1', 'did:plc:alice', value), null);
+  assert.equal(toNote('', 'bafy1', 'did:plc:alice', value), null);
+  assert.equal(toNote('at://did:plc:alice/c/1', undefined as unknown as string, 'did:plc:alice', value), null);
+});

@@ -164,11 +164,15 @@ async function main(): Promise<void> {
     recordsUrl.searchParams.set('repo', repo.did);
     recordsUrl.searchParams.set('collection', NOTE_COLLECTION);
     const listing = (await (await spaceFetch(recordsUrl)).json()) as {
-      records: { uri: string; cid: string; value: unknown }[];
+      records: { collection: string; rkey: string; cid: string; value?: unknown }[];
     };
     for (const record of listing.records) {
-      const note = toNote(record.uri, record.cid, repo.did, record.value);
-      console.log(`   ${note ? '✓' : '✗ (did not validate)'} ${record.uri}`);
+      // The listing returns the URI's parts, not the URI — unlike createRecord above,
+      // which returns the assembled thing. Printing `record.uri` here is what made the
+      // first run of this check report three ticks against three `undefined`s.
+      const uri = `${space}/${repo.did}/${record.collection}/${record.rkey}`;
+      const note = toNote(uri, record.cid, repo.did, record.value);
+      console.log(`   ${note ? '✓' : '✗ (did not validate)'} ${uri}`);
       total++;
     }
   }

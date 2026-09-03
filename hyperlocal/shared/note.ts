@@ -207,6 +207,12 @@ export function toNote(
   author: string,
   value: unknown,
 ): Note | null {
+  // A note with no identity is worse than no note: `uri` is what delete, focus and
+  // dedupe all key on, so a batch of them silently collapses into one. The alpha's
+  // space listing returns the parts of the URI rather than the URI, which is exactly
+  // the shape of mistake that reaches here as `undefined` past the type checker.
+  if (!uri || !cid) return null;
+
   const result = validateNote(value);
   if (!result.ok) return null;
   const record = result.record;
