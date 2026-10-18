@@ -123,7 +123,15 @@ async function addFiles(files: Iterable<File>) {
       const result = await jobsFromFile(file);
       jobs.push(...result.jobs);
       blank += result.blankPages;
-      if (result.jobs.length === 0) problems.push(`${file.name} has nothing on it to print.`);
+      if (result.blankBrowserPrint) {
+        problems.push(
+          `${file.name} is a blank page. It was saved with a browser's “Save as PDF”, which ` +
+            'often captures an online PDF viewer without the label in it. Use the download ' +
+            'button in the viewer to get the original label PDF, and add that instead.',
+        );
+      } else if (result.jobs.length === 0) {
+        problems.push(`${file.name} has nothing on it to print.`);
+      }
       renderJobs();
     } catch (error) {
       console.error(error);

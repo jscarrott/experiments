@@ -20,6 +20,12 @@ export interface PageSource {
   heightMm: number;
   /** Text on the page, for carrier detection. Empty for images. */
   text: string;
+  /**
+   * The PDF was made by a browser's print-to-PDF. Printing a web viewer showing a
+   * label (Adobe's, Google Drive's) often captures the page around the label and not
+   * the label itself, which is worth saying when such a PDF comes out blank.
+   */
+  printedFromBrowser: boolean;
   render(dpi: number): Promise<HTMLCanvasElement>;
 }
 
@@ -42,6 +48,12 @@ async function pagesFromPdf(file: File): Promise<PageSource[]> {
     standardFontDataUrl: new URL('pdfjs/standard_fonts/', document.baseURI).href,
   }).promise;
 
+  const { info } = (await doc.getMetadata().catch(() => ({ info: {} }))) as {
+    info: { Creator?: string; Producer?: string };
+  };
+  const printedFromBrowser =
+    /firefox|chrome|chromium|safari|edge|opera/i.test(info.Creator ?? '') || /^skia\/pdf/i.test(info.Producer ?? '');
+
   const pages: PageSource[] = [];
   for (let n = 1; n <= doc.numPages; n++) {
     const page = await doc.getPage(n);
@@ -55,6 +67,7 @@ async function pagesFromPdf(file: File): Promise<PageSource[]> {
       widthMm: (viewport.width / PT_PER_INCH) * MM_PER_INCH,
       heightMm: (viewport.height / PT_PER_INCH) * MM_PER_INCH,
       text,
+      printedFromBrowser,
       async render(dpi) {
         const scaled = page.getViewport({ scale: dpi / PT_PER_INCH });
         const canvas = document.createElement('canvas');
@@ -98,6 +111,7 @@ export function imagePage(
     widthMm,
     heightMm,
     text: '',
+    printedFromBrowser: false,
     async render(dpi) {
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round((widthMm / MM_PER_INCH) * dpi));

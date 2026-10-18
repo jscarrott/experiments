@@ -34,6 +34,8 @@ export interface FileResult {
   jobs: Job[];
   /** Pages with nothing on them — Vinted's PDFs often carry a blank second page. */
   blankPages: number;
+  /** Every page was blank, and the PDF came from a browser's print-to-PDF. */
+  blankBrowserPrint: boolean;
 }
 
 export async function jobsFromFile(file: File): Promise<FileResult> {
@@ -45,7 +47,8 @@ export async function jobsFromFile(file: File): Promise<FileResult> {
     if (job) jobs.push(job);
     else blankPages++;
   }
-  return { jobs, blankPages };
+  const blankBrowserPrint = jobs.length === 0 && pages.length > 0 && pages.every((p) => p.printedFromBrowser);
+  return { jobs, blankPages, blankBrowserPrint };
 }
 
 /** A job for a page, or undefined if the page is blank. */

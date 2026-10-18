@@ -208,3 +208,22 @@ test('printing opens the print dialog on A4 at actual size', async ({ page }) =>
   const css = await page.evaluate(() => (window as any).__printed.css);
   expect(css).toContain('size: 210mm 297mm');
 });
+
+test('a blank page printed from a browser viewer explains how to get the real label', async ({ page }) => {
+  // What Firefox's "Save as PDF" of Adobe's online viewer produces: one empty page.
+  const doc = await PDFDocument.create();
+  doc.setCreator('Firefox');
+  doc.setProducer('Skia/PDF m149');
+  doc.addPage([612, 792]);
+  const blankPrint = Buffer.from(await doc.save());
+
+  await page.goto('/');
+  await page.locator('#files').setInputFiles({
+    name: 'Vinted-Label - Adobe cloud storage.pdf',
+    mimeType: 'application/pdf',
+    buffer: blankPrint,
+  });
+  await expect(page.locator('#message')).toContainText('is a blank page');
+  await expect(page.locator('#message')).toContainText('download button');
+  await expect(page.locator('.job')).toHaveCount(0);
+});
