@@ -5,6 +5,9 @@
  *
  * The design: a white shipping label with a barcode on a teal square. The maskable
  * icon keeps everything inside the middle 80%, the circle Android may crop it to.
+ *
+ * The same drawing makes the Android app's launcher icons and splash screen, written
+ * straight into android/app/src/main/res.
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -12,14 +15,20 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
 
-const out = resolve(dirname(fileURLToPath(import.meta.url)), '../public/icons');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const out = resolve(root, 'public/icons');
 mkdirSync(out, { recursive: true });
 
 const TEAL = [11, 110, 105, 255];
 const WHITE = [255, 255, 255, 255];
 const INK = [29, 29, 27, 255];
 
-function icon(size, { maskable }) {
+/**
+ * background: 'rounded' (a plain icon), 'square' (maskable: the launcher crops it),
+ * 'circle' (Android's legacy round icon) or 'none' (an adaptive icon's foreground).
+ * scale shrinks the label about the centre, for the adaptive foreground's safe zone.
+ */
+function icon(size, { background, scale = 1 }) {
   const px = new Uint8Array(size * size * 4);
   const rect = (x, y, w, h, colour, radius = 0) => {
     for (let yy = Math.max(0, Math.floor(y)); yy < Math.min(size, Math.ceil(y + h)); yy++) {
@@ -33,13 +42,13 @@ function icon(size, { maskable }) {
       }
     }
   };
-  const u = size / 100;
-  // Maskable icons are cropped by the launcher, so they fill the square; the plain
-  // icon gets its own rounded corners.
-  rect(0, 0, size, size, TEAL, maskable ? 0 : 22 * u);
-  // Inside the safe zone either way: a 2:3 label, 44 × 62 units, centred.
-  const lx = 28 * u;
-  const ly = 19 * u;
+  if (background === 'rounded') rect(0, 0, size, size, TEAL, 22 * (size / 100));
+  if (background === 'square') rect(0, 0, size, size, TEAL);
+  if (background === 'circle') rect(0, 0, size, size, TEAL, size / 2);
+  const u = (size / 100) * scale;
+  // A 2:3 label, 44 × 62 units, centred: inside the maskable safe zone at full scale.
+  const lx = size / 2 - 22 * u;
+  const ly = size / 2 - 31 * u;
   rect(lx, ly, 44 * u, 62 * u, WHITE, 3 * u);
   rect(lx + 6 * u, ly + 7 * u, 12 * u, 8 * u, INK);
   rect(lx + 21 * u, ly + 8 * u, 17 * u, 2.5 * u, INK);
@@ -92,8 +101,23 @@ function crc32(buf) {
   return ~c >>> 0;
 }
 
-writeFileSync(resolve(out, 'icon-192.png'), icon(192, { maskable: false }));
-writeFileSync(resolve(out, 'icon-512.png'), icon(512, { maskable: false }));
-writeFileSync(resolve(out, 'maskable-512.png'), icon(512, { maskable: true }));
-writeFileSync(resolve(out, 'apple-touch-icon.png'), icon(180, { maskable: true }));
+writeFileSync(resolve(out, 'icon-192.png'), icon(192, { background: 'rounded' }));
+writeFileSync(resolve(out, 'icon-512.png'), icon(512, { background: 'rounded' }));
+writeFileSync(resolve(out, 'maskable-512.png'), icon(512, { background: 'square' }));
+writeFileSync(resolve(out, 'apple-touch-icon.png'), icon(180, { background: 'square' }));
 console.log(`Wrote icons to ${out}`);
+
+// Android: launcher icons per density (48 dp), adaptive foregrounds (108 dp, with the
+// label inside the 66 dp circle every launcher mask keeps), and the splash mark.
+const res = resolve(root, 'android/app/src/main/res');
+const densities = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
+for (const [density, k] of Object.entries(densities)) {
+  const dir = resolve(res, `mipmap-${density}`);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(resolve(dir, 'ic_launcher.png'), icon(48 * k, { background: 'rounded' }));
+  writeFileSync(resolve(dir, 'ic_launcher_round.png'), icon(48 * k, { background: 'circle' }));
+  writeFileSync(resolve(dir, 'ic_launcher_foreground.png'), icon(108 * k, { background: 'none', scale: 0.75 }));
+}
+mkdirSync(resolve(res, 'drawable-nodpi'), { recursive: true });
+writeFileSync(resolve(res, 'drawable-nodpi/splash_mark.png'), icon(480, { background: 'none' }));
+console.log(`Wrote Android icons to ${res}`);

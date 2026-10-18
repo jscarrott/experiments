@@ -1,0 +1,62 @@
+# Builds the Label Printer Android app (vinted-label-printer/) and attaches the APK
+# to the run. Run it by hand from the Actions tab, or push a tag like
+# label-printer-v0.2.0.
+#
+# Signing: set these repository secrets, or the APK comes out unsigned (which Android
+# will not install):
+#   LABEL_PRINTER_KEYSTORE_BASE64   base64 of the .jks file
+#   LABEL_PRINTER_KEYSTORE_PASSWORD store and key password (one password for both)
+#   LABEL_PRINTER_KEY_ALIAS         the key alias
+# Use the same keystore every time: Android only installs an update over an app
+# signed with the same key.
+name: Label Printer APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['label-printer-v*']
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vinted-label-printer
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vinted-label-printer/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Set up signing
+        env:
+          KEYSTORE: ${{ secrets.LABEL_PRINTER_KEYSTORE_BASE64 }}
+          PASSWORD: ${{ secrets.LABEL_PRINTER_KEYSTORE_PASSWORD }}
+          ALIAS: ${{ secrets.LABEL_PRINTER_KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::warning::No signing secrets set: the APK will be unsigned."
+            exit 0
+          fi
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/release.jks" "$PASSWORD" "$ALIAS" "$PASSWORD" > android/keystore.properties
+
+      - run: npm run android:apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: label-printer-apk
+          path: vinted-label-printer/android/app/build/outputs/apk/release/*.apk

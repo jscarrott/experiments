@@ -8,6 +8,7 @@ import { SHEET_LAYOUTS } from './layout/sheet.js';
 import { pagesToPdf } from './output/pdf.js';
 import { printPages } from './output/print.js';
 import { composeSheets } from './output/sheet.js';
+import * as app from './native.js';
 import { canShareFiles, registerServiceWorker, takeSharedFiles } from './pwa.js';
 import { qrPage } from './qr.js';
 import { loadSettings, saveSettings, type StoredSettings } from './store.js';
@@ -269,7 +270,8 @@ const printButton = $<HTMLButtonElement>('#print');
 const downloadButton = $<HTMLButtonElement>('#download');
 const clearButton = $<HTMLButtonElement>('#clear');
 const shareButton = $<HTMLButtonElement>('#share');
-shareButton.hidden = !canShareFiles();
+shareButton.hidden = !app.isApp() && !canShareFiles();
+if (app.isApp()) downloadButton.textContent = 'Save PDF';
 let working = false;
 
 function updateSummary() {
@@ -312,7 +314,6 @@ async function withPages(action: (pages: HTMLCanvasElement[], paper: { widthMm: 
   }
 }
 
-printButton.addEventListener('click', () => withPages(printPages));
 
 async function labelsPdf(pages: HTMLCanvasElement[], paper: { widthMm: number; heightMm: number }) {
   const bytes = await pagesToPdf(pages, paper);
@@ -320,9 +321,20 @@ async function labelsPdf(pages: HTMLCanvasElement[], paper: { widthMm: number; h
   return new File([bytes as Uint8Array<ArrayBuffer>], `labels-${stamp}.pdf`, { type: 'application/pdf' });
 }
 
+printButton.addEventListener('click', () =>
+  withPages(async (pages, paper) => {
+    if (app.isApp()) await app.printPdf(await labelsPdf(pages, paper), paper);
+    else await printPages(pages, paper);
+  }),
+);
+
 downloadButton.addEventListener('click', () =>
   withPages(async (pages, paper) => {
     const file = await labelsPdf(pages, paper);
+    if (app.isApp()) {
+      await app.savePdf(file);
+      return;
+    }
     const url = URL.createObjectURL(file);
     const a = document.createElement('a');
     a.href = url;
@@ -337,6 +349,10 @@ downloadButton.addEventListener('click', () =>
 shareButton.addEventListener('click', () =>
   withPages(async (pages, paper) => {
     const file = await labelsPdf(pages, paper);
+    if (app.isApp()) {
+      await app.sharePdf(file);
+      return;
+    }
     try {
       await navigator.share({ files: [file], title: file.name });
     } catch (error) {
@@ -354,5 +370,13 @@ clearButton.addEventListener('click', () => {
 
 renderJobs();
 
-if (import.meta.env.PROD) registerServiceWorker();
-void takeSharedFiles().then(addFiles);
+if (app.isApp()) {
+  // The app serves itself from inside the APK; it has no need of a service worker.
+  app.onSharedFiles((files, skipped) => {
+    void addFiles(files);
+    if (skipped.length) say(`Could not open ${skipped.join(', ')}.`);
+  });
+} else {
+  if (import.meta.env.PROD) registerServiceWorker();
+  void takeSharedFiles().then(addFiles);
+}

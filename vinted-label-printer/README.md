@@ -46,9 +46,50 @@ because barcodes scan best with hard edges, and thermal printers cannot print gr
 all: left to the printer driver, anti-aliased edges get dithered, and dithered barcode
 edges are where scans fail.
 
-## On Android
+## Android app (APK)
 
-It installs as an app from Chrome: open the site, then **⋮ → Add to Home screen →
+`android/` wraps the same site into a real Android app with
+[Capacitor](https://capacitorjs.com/). The whole app is inside the APK, so it needs
+no server, no hosting and no network. Install the APK, and that is everything.
+
+- **Share from Vinted:** Label Printer appears in the share sheet for PDFs and images,
+  and in "Open with" for downloaded PDFs. Share a label to it and it opens cropped.
+- **Print** goes straight to Android's print service, with the paper size preset to
+  A4 (or the label stock) and no margins.
+- **Save PDF** asks where to save (Downloads, Drive, …). **Share** sends the finished
+  PDF to another app, such as a thermal printer's own app.
+
+A web page inside an Android WebView cannot print, download or receive shared files
+by itself, so a small native plugin does those three things
+(`android/app/src/main/java/com/jscarrott/labelprinter/LabelPrinterPlugin.java`, about
+300 lines). Everything else is the same code as the website.
+
+### Installing it
+
+Copy the APK to the phone and open it. Android asks once to allow installs from
+whichever app you opened it with (Files, Chrome, Drive). It is not on the Play Store.
+
+### Building it
+
+Needs JDK 21 and the Android SDK (platform 35).
+
+```bash
+npm run android:apk   # -> android/app/build/outputs/apk/release/app-release.apk
+```
+
+Signing reads `android/keystore.properties` (format in `android/app/build.gradle`).
+Without it the APK is unsigned, and Android will not install an unsigned APK.
+**Keep the keystore.** Android only installs an update over an app signed with the
+same key; with a new key you have to uninstall first, which loses saved crops and
+settings.
+
+`.github/workflows/label-printer-apk.yml` builds the APK on GitHub: run it from the
+Actions tab, or push a `label-printer-v*` tag. It signs with the keystore in the
+repository secrets it lists.
+
+## As an installable web app
+
+Without the APK, it installs as an app from Chrome: open the site, then **⋮ → Add to Home screen →
 Install**. You get an icon, it runs full-screen, and it works offline once it has
 been opened once.
 
@@ -137,6 +178,8 @@ src/
   jobs.ts      a page plus its preview, carrier and crop
   store.ts     settings and saved crops, in this browser's storage
   pwa.ts       service worker registration, files shared from Android
+  native.ts    the Android app's print, save, share and shared-file plugin
+android/       the Capacitor Android project (LabelPrinterPlugin.java is the native code)
 public/
   sw.js        offline cache, and receiving shared files
   manifest.webmanifest, icons/   (icons drawn by scripts/make-icons.mjs)
