@@ -1,0 +1,115 @@
+# Label Printer
+
+A self-hosted take on [Crop My Label](https://www.cropmylabel.co.uk/): drop in the A4
+shipping-label PDF Vinted gives you and get a 4×6 label for a thermal printer, cropped,
+scaled to fill, and ready to print or save as a PDF.
+
+It is a static site. Everything happens in the browser — the PDF is read, cropped and
+printed on your machine — so the server only ever hands out HTML and JavaScript, and
+there is no monthly label allowance to run out of.
+
+## What it does
+
+- **Finds the label on the page.** Drop in the A4 sheet; the instructions, the
+  "thank you for selling" text and the cut lines are left behind.
+- **Knows the carrier.** Royal Mail, Evri, InPost, DPD and Yodel are recognised from
+  the text in the PDF and shown on each label.
+- **Remembers your fixes.** If an automatic crop is off, drag it right once and press
+  *Use this crop for all Evri labels*. Every later Evri sheet uses that crop. This is
+  the feature that makes the tool trustworthy: if Vinted changes a template, one
+  correction fixes every label after it.
+- **Batches.** Drop several PDFs at once; print them in one job or download one PDF
+  with a page per label. Blank pages (Vinted's PDFs often have a blank second page)
+  are skipped, and any label can be left out.
+- **Prints at the right size.** Print opens the browser's dialog with the page size
+  already set to the label stock and no margins. Choose your thermal printer, set
+  scale to 100% if the dialog offers one, and print.
+- **QR labels.** Paste a code or a link and get a big, scannable QR code on a label,
+  with an optional caption.
+- **Images too.** A screenshot or a scan works as well as a PDF, and a screenshot can
+  be pasted straight in with Ctrl+V.
+
+Settings: label size (4×6 in, 100×150 mm, A6, 4×4 in), margin, 203 or 300 DPI, turning
+landscape labels to fit, and pure black and white output. Black and white is on by
+default because thermal printers cannot print grey: left to the printer driver,
+anti-aliased edges get dithered, and dithered barcode edges are where scans fail.
+
+## How it finds the label
+
+`src/detect/crop.ts` works from the ink on the page, not from a stored template for
+each carrier, so a layout change at Vinted's end makes it worse rather than broken:
+
+1. Rub out fold lines and cut-here lines, solid or dashed, so they do not join every
+   block on the page into one.
+2. Spread the ink a few millimetres so each block runs together, and split the page
+   into the blobs that come out.
+3. Score each blob. A label is large, has a frame round it, and has barcodes or a QR
+   code — dense patches of ink that body text never has. Instructions are large too,
+   but sparse and unframed.
+4. Pull in close neighbours, so an unframed label whose barcode stands a little apart
+   from the address comes back whole.
+
+A page already label-sized (a carrier's own 4×6 PDF) is printed whole.
+
+**Tested only on synthetic labels.** The detector is tested against generated pages
+(`test/page.ts`) and a generated Vinted-style A4 PDF (`e2e/fixtures.ts`), not against
+real Vinted labels, which contain buyers' addresses. Expect the first label from each
+carrier to need checking. If one comes out wrong, fix it in the editor and save the
+crop for that carrier.
+
+## Running it
+
+### Docker
+
+```bash
+docker compose up -d --build     # http://localhost:8080
+```
+
+nginx serves the built files with a strict Content-Security-Policy. `connect-src 'self'`
+means the page could not send a label anywhere even if it tried. Put it behind your
+usual reverse proxy for HTTPS. Over plain HTTP everything still works, except pasting
+from the clipboard on some browsers.
+
+### Any static host
+
+```bash
+npm install
+npm run build        # -> dist/
+```
+
+`dist/` is plain files with relative paths. Copy it to any web server, NAS share or
+GitHub Pages site. It needs to be served over HTTP: opening `index.html` from disk does
+not work, because browsers will not start the PDF worker from a `file://` URL.
+
+### Development
+
+```bash
+npm run dev          # dev server
+npm test             # unit tests: detector, carrier detection, layout
+npm run test:e2e     # Playwright, against the built site
+npm run check        # typecheck + unit + build + e2e
+```
+
+## Layout
+
+```
+src/
+  detect/      pure functions: find the label, name the carrier — unit-tested in Node
+  layout/      pure functions: fit a crop onto the label stock
+  output/      draw the finished label, print it, write the PDF
+  ui/          the crop editor
+  source.ts    PDFs and images in, renderable pages out (pdf.js)
+  jobs.ts      a page plus its preview, carrier and crop
+  store.ts     settings and saved crops, in this browser's storage
+```
+
+## What it doesn't do
+
+- **No browser extension.** Crop My Label hooks Vinted's print button. Here you save
+  the PDF from Vinted and drop it in. That is one more step, but nothing needs access
+  to your Vinted session.
+- **No direct printer driver.** Printing goes through the browser's print dialog. For
+  the cleanest result, set the printer's default paper to 4×6 once in the OS printer
+  settings.
+- Saved crops and settings live in the browser you set them in, so a crop saved on a
+  laptop does not follow you to a phone.
