@@ -1,8 +1,9 @@
 # Label Printer
 
 A self-hosted take on [Crop My Label](https://www.cropmylabel.co.uk/): drop in the A4
-shipping-label PDF Vinted gives you and get a 4×6 label for a thermal printer, cropped,
-scaled to fill, and ready to print or save as a PDF.
+shipping-label PDF Vinted gives you and get just the label, cropped and scaled to fill.
+Print it four or two to an A4 sheet on an ordinary printer, or one per page on a 4×6
+thermal label printer, or save it as a PDF.
 
 It is a static site. Everything happens in the browser — the PDF is read, cropped and
 printed on your machine — so the server only ever hands out HTML and JavaScript, and
@@ -21,18 +22,29 @@ there is no monthly label allowance to run out of.
 - **Batches.** Drop several PDFs at once; print them in one job or download one PDF
   with a page per label. Blank pages (Vinted's PDFs often have a blank second page)
   are skipped, and any label can be left out.
+- **Packs labels onto A4.** The default puts four labels on each A4 sheet, one per
+  quarter. Each quarter is A6, which is close to 4×6, and the quarters match the
+  common 4-per-sheet A4 sticker sheets. Two per sheet (A5 halves) and one per sheet
+  are also available. **Start at** lets you finish a part-used sticker sheet, e.g.
+  start at the bottom left when the top two stickers are gone; the next sheet starts
+  from the top again. On plain paper, cut guides mark where to cut.
 - **Prints at the right size.** Print opens the browser's dialog with the page size
-  already set to the label stock and no margins. Choose your thermal printer, set
-  scale to 100% if the dialog offers one, and print.
+  already set (A4, or the label stock for a label printer) and no margins. Print at
+  100% / actual size, not "fit to page", or labels will not line up with stickers.
 - **QR labels.** Paste a code or a link and get a big, scannable QR code on a label,
   with an optional caption.
 - **Images too.** A screenshot or a scan works as well as a PDF, and a screenshot can
   be pasted straight in with Ctrl+V.
 
-Settings: label size (4×6 in, 100×150 mm, A6, 4×4 in), margin, 203 or 300 DPI, turning
-landscape labels to fit, and pure black and white output. Black and white is on by
-default because thermal printers cannot print grey: left to the printer driver,
-anti-aliased edges get dithered, and dithered barcode edges are where scans fail.
+Settings: what to print on (A4 at 4, 2 or 1 per sheet, or a label printer with 4×6 in,
+100×150 mm, A6 or 4×4 in stock), margin, 203 or 300 DPI, turning landscape labels to
+fit, cut guides, and pure black and white output.
+
+The margin defaults to 4 mm because most home printers cannot print right up to the
+paper edge; on a label printer it can go lower. Black and white is on by default
+because barcodes scan best with hard edges, and thermal printers cannot print grey at
+all: left to the printer driver, anti-aliased edges get dithered, and dithered barcode
+edges are where scans fail.
 
 ## How it finds the label
 
@@ -95,7 +107,7 @@ npm run check        # typecheck + unit + build + e2e
 ```
 src/
   detect/      pure functions: find the label, name the carrier — unit-tested in Node
-  layout/      pure functions: fit a crop onto the label stock
+  layout/      pure functions: fit a crop onto the label stock, lay labels out on A4
   output/      draw the finished label, print it, write the PDF
   ui/          the crop editor
   source.ts    PDFs and images in, renderable pages out (pdf.js)
@@ -108,8 +120,10 @@ src/
 - **No browser extension.** Crop My Label hooks Vinted's print button. Here you save
   the PDF from Vinted and drop it in. That is one more step, but nothing needs access
   to your Vinted session.
-- **No direct printer driver.** Printing goes through the browser's print dialog. For
-  the cleanest result, set the printer's default paper to 4×6 once in the OS printer
-  settings.
+- **No direct printer driver.** Printing goes through the browser's print dialog. With
+  a label printer, set its default paper to 4×6 once in the OS printer settings.
+- **No sticker-sheet calibration.** Labels are placed on exact A4 quarters or halves.
+  If your printer shifts the page by a millimetre or two, raise the margin rather than
+  expect a perfect fit to the sticker edges.
 - Saved crops and settings live in the browser you set them in, so a crop saved on a
   laptop does not follow you to a phone.

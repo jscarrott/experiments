@@ -7,21 +7,28 @@
 import type { Carrier } from './detect/carrier.js';
 import type { Rect } from './detect/rect.js';
 import { LABEL_SIZES } from './layout/fit.js';
+import { SHEET_LAYOUTS } from './layout/sheet.js';
 
 export interface StoredSettings {
+  /** 'label' for a label printer, or the id of an A4 sheet layout. */
+  output: string;
   sizeId: string;
   marginMm: number;
   rotate: boolean;
   monochrome: boolean;
   dpi: number;
+  cutGuides: boolean;
 }
 
 export const DEFAULT_SETTINGS: StoredSettings = {
+  output: SHEET_LAYOUTS[0]!.id,
   sizeId: LABEL_SIZES[0]!.id,
-  marginMm: 2,
+  // Most home printers cannot print within 3–4 mm of the paper edge.
+  marginMm: 4,
   rotate: true,
   monochrome: true,
-  dpi: 203,
+  dpi: 300,
+  cutGuides: true,
 };
 
 const SETTINGS_KEY = 'vinted-label-printer.settings';

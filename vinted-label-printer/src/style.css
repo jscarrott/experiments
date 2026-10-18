@@ -393,3 +393,8 @@ dialog::backdrop {
   border-left-color: var(--accent);
   color: var(--muted);
 }
+
+/* `display: flex` on form rows would otherwise beat the hidden attribute. */
+[hidden] {
+  display: none !important;
+}

@@ -1,15 +1,16 @@
 /**
- * Printing straight from the page, one label per sheet.
+ * Printing straight from the page: one image per printed page, either a single label
+ * or an A4 sheet of them.
  *
- * The labels go into a hidden frame whose stylesheet sets the page size to the label
- * stock with no margins, so the print dialog opens already set up for a 4×6 thermal
- * printer. Printing a generated PDF instead would hand the job to the browser's PDF
+ * The images go into a hidden frame whose stylesheet sets the page size to the paper
+ * with no margins, so the print dialog opens already set up for a 4×6 thermal printer
+ * or for A4 at actual size. Printing a generated PDF instead would hand the job to the browser's PDF
  * viewer, which scales to fit and adds margins of its own.
  */
 
 import type { LabelSize } from '../layout/fit.js';
 
-export async function printLabels(labels: HTMLCanvasElement[], size: LabelSize): Promise<void> {
+export async function printPages(labels: HTMLCanvasElement[], size: Pick<LabelSize, 'widthMm' | 'heightMm'>): Promise<void> {
   const urls = await Promise.all(
     labels.map(
       (label) =>

@@ -10,7 +10,7 @@
   <body>
     <header class="top">
       <h1>Label Printer</h1>
-      <p class="tagline">Vinted A4 labels in, 4×6 thermal labels out. Nothing leaves this browser.</p>
+      <p class="tagline">Vinted labels in, cropped and packed onto A4 or 4×6. Nothing leaves this browser.</p>
     </header>
 
     <main class="layout">
@@ -33,16 +33,20 @@
         <details class="panel" open>
           <summary>Label settings</summary>
           <form id="settings" class="stack">
-            <label>Label size <select name="sizeId"></select></label>
+            <label>Print on <select name="output"></select></label>
+            <label data-for="sheet">Start at <select name="startAt"></select></label>
+            <label data-for="label">Label size <select name="sizeId"></select></label>
             <label>Margin <span class="inline"><input name="marginMm" type="number" min="0" max="15" step="0.5" /> mm</span></label>
             <label>Print resolution
               <select name="dpi">
                 <option value="203">203 DPI (most thermal printers)</option>
-                <option value="300">300 DPI</option>
+                <option value="300">300 DPI (home printers)</option>
               </select>
             </label>
             <label class="check"><input name="rotate" type="checkbox" /> Turn landscape labels to fit</label>
             <label class="check"><input name="monochrome" type="checkbox" /> Pure black and white (sharper barcodes)</label>
+            <label class="check" data-for="sheet"><input name="cutGuides" type="checkbox" /> Cut guides between labels</label>
+            <p class="hint" data-for="sheet">Print at 100% / actual size, not “fit to page”, so labels line up with sticker sheets.</p>
           </form>
         </details>
       </section>

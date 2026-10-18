@@ -4,15 +4,15 @@ import type { LabelSize } from '../layout/fit.js';
 
 const PT_PER_MM = 72 / 25.4;
 
-/** One page per label, each exactly the label stock size, the label image filling it. */
-export async function labelsToPdf(labels: HTMLCanvasElement[], size: LabelSize): Promise<Uint8Array> {
+/** One page per image — a label or a sheet of them — each image filling its page exactly. */
+export async function pagesToPdf(pages: HTMLCanvasElement[], size: Pick<LabelSize, 'widthMm' | 'heightMm'>): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.setTitle('Shipping labels');
   doc.setCreator('Vinted Label Printer');
   const w = size.widthMm * PT_PER_MM;
   const h = size.heightMm * PT_PER_MM;
-  for (const label of labels) {
-    const png = await doc.embedPng(await canvasToPng(label));
+  for (const page of pages) {
+    const png = await doc.embedPng(await canvasToPng(page));
     doc.addPage([w, h]).drawImage(png, { x: 0, y: 0, width: w, height: h });
   }
   return doc.save();

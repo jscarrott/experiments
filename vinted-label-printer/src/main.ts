@@ -4,8 +4,10 @@ import { CARRIER_NAMES } from './detect/carrier.js';
 import { describeOrigin, jobFromPage, jobsFromFile, type Job } from './jobs.js';
 import { LABEL_SIZES } from './layout/fit.js';
 import { drawLabel, renderLabel, type LabelSettings } from './output/label.js';
-import { labelsToPdf } from './output/pdf.js';
-import { printLabels } from './output/print.js';
+import { SHEET_LAYOUTS } from './layout/sheet.js';
+import { pagesToPdf } from './output/pdf.js';
+import { printPages } from './output/print.js';
+import { composeSheets } from './output/sheet.js';
 import { qrPage } from './qr.js';
 import { loadSettings, saveSettings, type StoredSettings } from './store.js';
 import { openEditor } from './ui/editor.js';
@@ -15,8 +17,21 @@ const $ = <T extends Element>(selector: string) => document.querySelector<T>(sel
 const jobs: Job[] = [];
 let stored: StoredSettings = loadSettings();
 
+const sheetLayout = () => SHEET_LAYOUTS.find((l) => l.id === stored.output);
+
+/** Where the first label goes on the first A4 sheet; 0-based. Not remembered between visits. */
+let startAt = 0;
+
+/** On A4, each label is drawn at its cell's size; on a label printer, at the stock size. */
+function labelSize() {
+  const layout = sheetLayout();
+  if (!layout) return LABEL_SIZES.find((s) => s.id === stored.sizeId) ?? LABEL_SIZES[0]!;
+  const cell = layout.cells[0]!;
+  return { id: layout.id, name: layout.name, widthMm: cell.widthMm, heightMm: cell.heightMm };
+}
+
 const settings = (): LabelSettings => ({
-  size: LABEL_SIZES.find((s) => s.id === stored.sizeId) ?? LABEL_SIZES[0]!,
+  size: labelSize(),
   marginMm: stored.marginMm,
   rotate: stored.rotate,
   monochrome: stored.monochrome,
@@ -31,9 +46,27 @@ const settings = (): LabelSettings => ({
 const settingsForm = $<HTMLFormElement>('#settings');
 const sizeSelect = settingsForm.elements.namedItem('sizeId') as HTMLSelectElement;
 sizeSelect.append(...LABEL_SIZES.map((s) => new Option(s.name, s.id)));
+const outputSelect = settingsForm.elements.namedItem('output') as HTMLSelectElement;
+outputSelect.append(...SHEET_LAYOUTS.map((l) => new Option(l.name, l.id)), new Option('Label printer', 'label'));
+const startSelect = settingsForm.elements.namedItem('startAt') as HTMLSelectElement;
+
+/** Show the controls that apply to the chosen output, and list its start positions. */
+function showOutputControls() {
+  const layout = sheetLayout();
+  for (const el of settingsForm.querySelectorAll<HTMLElement>('[data-for]')) {
+    el.hidden = el.dataset.for !== (layout ? 'sheet' : 'label');
+  }
+  if (!layout) return;
+  startAt = Math.min(startAt, layout.cells.length - 1);
+  startSelect.replaceChildren(...layout.positions.map((name, i) => new Option(name, String(i))));
+  startSelect.value = String(startAt);
+  (startSelect.closest('label') as HTMLElement).hidden = layout.cells.length === 1;
+}
 
 function showSettings() {
   const f = settingsForm.elements;
+  outputSelect.value = sheetLayout() ? stored.output : 'label';
+  (f.namedItem('cutGuides') as HTMLInputElement).checked = stored.cutGuides;
   (f.namedItem('sizeId') as HTMLSelectElement).value = stored.sizeId;
   (f.namedItem('marginMm') as HTMLInputElement).value = String(stored.marginMm);
   (f.namedItem('dpi') as HTMLSelectElement).value = String(stored.dpi);
@@ -44,7 +77,11 @@ function showSettings() {
 settingsForm.addEventListener('input', () => {
   const f = settingsForm.elements;
   const margin = Number((f.namedItem('marginMm') as HTMLInputElement).value);
+  // A position on one layout means nothing on another: start a new layout at the top.
+  startAt = outputSelect.value === stored.output ? Number(startSelect.value) || 0 : 0;
   stored = {
+    output: outputSelect.value,
+    cutGuides: (f.namedItem('cutGuides') as HTMLInputElement).checked,
     sizeId: (f.namedItem('sizeId') as HTMLSelectElement).value,
     marginMm: Number.isFinite(margin) ? Math.min(15, Math.max(0, margin)) : stored.marginMm,
     dpi: Number((f.namedItem('dpi') as HTMLSelectElement).value),
@@ -52,10 +89,12 @@ settingsForm.addEventListener('input', () => {
     monochrome: (f.namedItem('monochrome') as HTMLInputElement).checked,
   };
   saveSettings(stored);
+  showOutputControls();
   renderJobs();
 });
 settingsForm.addEventListener('submit', (e) => e.preventDefault());
 showSettings();
+showOutputControls();
 
 // ---- Adding labels --------------------------------------------------------------
 
@@ -241,18 +280,22 @@ function updateSummary() {
   printButton.textContent = count > 1 ? `Print ${count}` : 'Print';
 }
 
-async function renderIncluded(): Promise<HTMLCanvasElement[]> {
+/** The printed pages, each with its paper size: labels, or A4 sheets of them. */
+async function renderPages() {
   const s = settings();
-  const out: HTMLCanvasElement[] = [];
-  for (const job of jobs.filter((j) => j.include)) out.push(await renderLabel(job.page, job.crop, s));
-  return out;
+  const labels: HTMLCanvasElement[] = [];
+  for (const job of jobs.filter((j) => j.include)) labels.push(await renderLabel(job.page, job.crop, s));
+  const layout = sheetLayout();
+  if (!layout) return { pages: labels, paper: s.size };
+  return { pages: composeSheets(labels, layout, startAt, s.dpi, stored.cutGuides), paper: layout.paper };
 }
 
-async function withLabels(action: (labels: HTMLCanvasElement[]) => Promise<void>) {
+async function withPages(action: (pages: HTMLCanvasElement[], paper: { widthMm: number; heightMm: number }) => Promise<void>) {
   working = true;
   updateSummary();
   try {
-    await action(await renderIncluded());
+    const { pages, paper } = await renderPages();
+    await action(pages, paper);
     say('');
   } catch (error) {
     console.error(error);
@@ -263,11 +306,11 @@ async function withLabels(action: (labels: HTMLCanvasElement[]) => Promise<void>
   }
 }
 
-printButton.addEventListener('click', () => withLabels((labels) => printLabels(labels, settings().size)));
+printButton.addEventListener('click', () => withPages(printPages));
 
 downloadButton.addEventListener('click', () =>
-  withLabels(async (labels) => {
-    const bytes = await labelsToPdf(labels, settings().size);
+  withPages(async (pages, paper) => {
+    const bytes = await pagesToPdf(pages, paper);
     const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }));
     const a = document.createElement('a');
     const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');

@@ -5,6 +5,16 @@ import { PDFDocument } from 'pdf-lib';
 
 import { vintedStylePdf } from './fixtures';
 
+async function downloadPdf(page: Page) {
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download PDF' }).click();
+  return PDFDocument.load(await readFile((await (await downloadPromise).path())!));
+}
+
+async function downloadPageCount(page: Page) {
+  return (await downloadPdf(page)).getPageCount();
+}
+
 async function state(page: Page) {
   return page.evaluate(() => {
     const app = (window as any).__labels;
@@ -27,7 +37,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('an A4 Evri sheet becomes one cropped 4×6 label', async ({ page }) => {
+test('an A4 Evri sheet is cropped and printed on A4, four to a sheet, by default', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const requests: string[] = [];
@@ -64,8 +74,8 @@ test('an A4 Evri sheet becomes one cropped 4×6 label', async ({ page }) => {
   const pdf = await PDFDocument.load(await readFile((await download.path())!));
   expect(pdf.getPageCount()).toBe(1);
   const { width, height } = pdf.getPage(0).getSize();
-  expect(width).toBeCloseTo(288, 0); // 4 in
-  expect(height).toBeCloseTo(432, 0); // 6 in
+  expect(width).toBeCloseTo(595.3, 0); // A4
+  expect(height).toBeCloseTo(841.9, 0);
 
   expect(errors).toEqual([]);
   const offsite = requests.filter((u) => !u.startsWith('http://localhost:4174') && !u.startsWith('blob:') && !u.startsWith('data:'));
@@ -87,10 +97,47 @@ test('carriers are told apart, and a batch downloads as one PDF', async ({ page 
   await page.locator('.job').nth(1).getByLabel('Print').uncheck();
   await expect(page.locator('#summary')).toHaveText('2 labels to print');
 
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download PDF' }).click();
-  const pdf = await PDFDocument.load(await readFile((await (await downloadPromise).path())!));
+  // Two labels fit on one A4 sheet, four up.
+  expect(await downloadPageCount(page)).toBe(1);
+});
+
+test('a half-used sticker sheet is finished before a new one is started', async ({ page }) => {
+  await page.goto('/');
+  const files = await Promise.all(
+    ['a', 'b', 'c'].map(async (name) => ({
+      name: `${name}.pdf`,
+      mimeType: 'application/pdf',
+      buffer: await vintedStylePdf('Evri'),
+    })),
+  );
+  await page.locator('#files').setInputFiles(files);
+  await expect(page.locator('.job')).toHaveCount(3);
+
+  expect(await downloadPageCount(page)).toBe(1);
+  // Two stickers used: start at the bottom left, so the third label spills onto sheet two.
+  await page.getByLabel('Start at').selectOption('Bottom left');
+  expect(await downloadPageCount(page)).toBe(2);
+
+  // Two per sheet: three labels need two sheets from the top.
+  await page.getByLabel('Print on').selectOption('a4-2');
+  await expect(page.getByLabel('Start at')).toHaveValue('0');
+  expect(await downloadPageCount(page)).toBe(2);
+});
+
+test('a label printer gets one 4×6 page per label', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Print on').selectOption('label');
+  await expect(page.getByLabel('Start at')).toBeHidden();
+  await page.locator('#files').setInputFiles([
+    { name: 'a.pdf', mimeType: 'application/pdf', buffer: await vintedStylePdf('Evri') },
+    { name: 'b.pdf', mimeType: 'application/pdf', buffer: await vintedStylePdf('InPost') },
+  ]);
+  await expect(page.locator('.job')).toHaveCount(2);
+  const pdf = await downloadPdf(page);
   expect(pdf.getPageCount()).toBe(2);
+  const { width, height } = pdf.getPage(0).getSize();
+  expect(width).toBeCloseTo(288, 0); // 4 in
+  expect(height).toBeCloseTo(432, 0); // 6 in
 });
 
 test('a hand-adjusted crop can be saved and is reused for the next label from that carrier', async ({ page }) => {
@@ -138,7 +185,7 @@ test('a QR label is made from a link and fills the label', async ({ page }) => {
   expect(job.crop).toEqual({ x: 0, y: 0, w: 1, h: 1 });
 });
 
-test('printing opens the print dialog on label-sized pages', async ({ page }) => {
+test('printing opens the print dialog on A4 at actual size', async ({ page }) => {
   // Init scripts run in every frame, including the print frame: stub print there so
   // the test does not block on a dialog, and report what it would have printed.
   await page.addInitScript(() => {
@@ -161,5 +208,5 @@ test('printing opens the print dialog on label-sized pages', async ({ page }) =>
   await page.getByRole('button', { name: 'Print' }).click();
   await expect.poll(() => page.evaluate(() => (window as any).__printed?.images)).toBe(1);
   const css = await page.evaluate(() => (window as any).__printed.css);
-  expect(css).toContain('size: 101.6mm 152.4mm');
+  expect(css).toContain('size: 210mm 297mm');
 });
