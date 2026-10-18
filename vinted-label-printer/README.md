@@ -46,6 +46,29 @@ because barcodes scan best with hard edges, and thermal printers cannot print gr
 all: left to the printer driver, anti-aliased edges get dithered, and dithered barcode
 edges are where scans fail.
 
+## On Android
+
+It installs as an app from Chrome: open the site, then **⋮ → Add to Home screen →
+Install**. You get an icon, it runs full-screen, and it works offline once it has
+been opened once.
+
+Installing also puts **Label Printer** in Android's share sheet for PDFs and images.
+In Vinted, open the label, share it, and pick Label Printer. The label arrives
+already cropped, with no downloading and finding the file. The shared file goes to
+the app on the phone, not to the server.
+
+From there, **Print** goes through Android's print service (Mopria, or your printer
+maker's plugin). **Share** hands the finished PDF to another app, which is the route
+for a thermal printer whose own app does the printing.
+
+Two requirements:
+
+- **HTTPS.** Android only installs web apps from secure origins. Put the container
+  behind a reverse proxy with a certificate. For a phone on your own tailnet,
+  `tailscale serve --bg 8080` gives you HTTPS without exposing anything publicly.
+- **Chrome** (or another Chromium browser) to install it. The share-sheet entry
+  appears only once it is installed.
+
 ## How it finds the label
 
 `src/detect/crop.ts` works from the ink on the page, not from a stored template for
@@ -113,6 +136,10 @@ src/
   source.ts    PDFs and images in, renderable pages out (pdf.js)
   jobs.ts      a page plus its preview, carrier and crop
   store.ts     settings and saved crops, in this browser's storage
+  pwa.ts       service worker registration, files shared from Android
+public/
+  sw.js        offline cache, and receiving shared files
+  manifest.webmanifest, icons/   (icons drawn by scripts/make-icons.mjs)
 ```
 
 ## What it doesn't do

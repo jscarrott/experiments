@@ -8,6 +8,7 @@ import { SHEET_LAYOUTS } from './layout/sheet.js';
 import { pagesToPdf } from './output/pdf.js';
 import { printPages } from './output/print.js';
 import { composeSheets } from './output/sheet.js';
+import { canShareFiles, registerServiceWorker, takeSharedFiles } from './pwa.js';
 import { qrPage } from './qr.js';
 import { loadSettings, saveSettings, type StoredSettings } from './store.js';
 import { openEditor } from './ui/editor.js';
@@ -95,6 +96,9 @@ settingsForm.addEventListener('input', () => {
 settingsForm.addEventListener('submit', (e) => e.preventDefault());
 showSettings();
 showOutputControls();
+// On a phone the open settings push the labels a screen down; they are set once and
+// rarely touched, so start them folded away.
+if (matchMedia('(max-width: 760px)').matches) $<HTMLDetailsElement>('#settings-panel').open = false;
 
 // ---- Adding labels --------------------------------------------------------------
 
@@ -264,6 +268,8 @@ const summary = $<HTMLParagraphElement>('#summary');
 const printButton = $<HTMLButtonElement>('#print');
 const downloadButton = $<HTMLButtonElement>('#download');
 const clearButton = $<HTMLButtonElement>('#clear');
+const shareButton = $<HTMLButtonElement>('#share');
+shareButton.hidden = !canShareFiles();
 let working = false;
 
 function updateSummary() {
@@ -275,7 +281,7 @@ function updateSummary() {
       : jobs.length === 0
         ? 'No labels yet.'
         : `${count} ${count === 1 ? 'label' : 'labels'} to print`;
-  printButton.disabled = downloadButton.disabled = count === 0 || working || busy > 0;
+  printButton.disabled = downloadButton.disabled = shareButton.disabled = count === 0 || working || busy > 0;
   clearButton.disabled = jobs.length === 0 || working;
   printButton.textContent = count > 1 ? `Print ${count}` : 'Print';
 }
@@ -308,16 +314,35 @@ async function withPages(action: (pages: HTMLCanvasElement[], paper: { widthMm: 
 
 printButton.addEventListener('click', () => withPages(printPages));
 
+async function labelsPdf(pages: HTMLCanvasElement[], paper: { widthMm: number; heightMm: number }) {
+  const bytes = await pagesToPdf(pages, paper);
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
+  return new File([bytes as Uint8Array<ArrayBuffer>], `labels-${stamp}.pdf`, { type: 'application/pdf' });
+}
+
 downloadButton.addEventListener('click', () =>
   withPages(async (pages, paper) => {
-    const bytes = await pagesToPdf(pages, paper);
-    const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }));
+    const file = await labelsPdf(pages, paper);
+    const url = URL.createObjectURL(file);
     const a = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
     a.href = url;
-    a.download = `labels-${stamp}.pdf`;
+    a.download = file.name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }),
+);
+
+// On a phone, the way to a printer is often another app: a printer maker's app, or
+// a thermal printer's own. Share hands it the finished PDF.
+shareButton.addEventListener('click', () =>
+  withPages(async (pages, paper) => {
+    const file = await labelsPdf(pages, paper);
+    try {
+      await navigator.share({ files: [file], title: file.name });
+    } catch (error) {
+      // Closing the share sheet is not an error worth reporting.
+      if (!(error instanceof DOMException && error.name === 'AbortError')) throw error;
+    }
   }),
 );
 
@@ -328,3 +353,6 @@ clearButton.addEventListener('click', () => {
 });
 
 renderJobs();
+
+if (import.meta.env.PROD) registerServiceWorker();
+void takeSharedFiles().then(addFiles);

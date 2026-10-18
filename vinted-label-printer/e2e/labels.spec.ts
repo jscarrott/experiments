@@ -186,14 +186,12 @@ test('a QR label is made from a link and fills the label', async ({ page }) => {
 });
 
 test('printing opens the print dialog on A4 at actual size', async ({ page }) => {
-  // Init scripts run in every frame, including the print frame: stub print there so
-  // the test does not block on a dialog, and report what it would have printed.
+  // Stub print so the test does not block on a dialog, and report what it would print.
   await page.addInitScript(() => {
-    if (window === window.top) return;
     window.print = () => {
-      (window.top as any).__printed = {
-        images: document.images.length,
-        css: document.querySelector('style')?.textContent ?? '',
+      (window as any).__printed = {
+        images: document.querySelectorAll('#print-pages img').length,
+        css: [...document.querySelectorAll('style')].map((s) => s.textContent).join('\n'),
       };
     };
   });

@@ -2,50 +2,53 @@
  * Printing straight from the page: one image per printed page, either a single label
  * or an A4 sheet of them.
  *
- * The images go into a hidden frame whose stylesheet sets the page size to the paper
- * with no margins, so the print dialog opens already set up for a 4×6 thermal printer
- * or for A4 at actual size. Printing a generated PDF instead would hand the job to the browser's PDF
- * viewer, which scales to fit and adds margins of its own.
+ * The images go into a print-only section of this page, and a print stylesheet hides
+ * everything else and sets the page size to the paper with no margins, so the print
+ * dialog opens already set up for a 4×6 thermal printer or for A4 at actual size.
+ *
+ * Not a hidden frame: Chrome on Android prints the top-level page whatever frame asks,
+ * and printing a generated PDF hands the job to a PDF viewer that scales to fit and
+ * adds margins of its own.
  */
 
 import type { LabelSize } from '../layout/fit.js';
 
-export async function printPages(labels: HTMLCanvasElement[], size: Pick<LabelSize, 'widthMm' | 'heightMm'>): Promise<void> {
+export async function printPages(pages: HTMLCanvasElement[], size: Pick<LabelSize, 'widthMm' | 'heightMm'>): Promise<void> {
   const urls = await Promise.all(
-    labels.map(
-      (label) =>
+    pages.map(
+      (page) =>
         new Promise<string>((resolve, reject) =>
-          label.toBlob((b) => (b ? resolve(URL.createObjectURL(b)) : reject(new Error('Could not encode the label.')))),
+          page.toBlob((b) => (b ? resolve(URL.createObjectURL(b)) : reject(new Error('Could not encode the label.')))),
         ),
     ),
   );
 
-  const frame = document.createElement('iframe');
-  frame.setAttribute('aria-hidden', 'true');
-  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
-  frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><title>Shipping labels</title><style>
+  const style = document.createElement('style');
+  style.textContent = `@media print {
     @page { size: ${size.widthMm}mm ${size.heightMm}mm; margin: 0; }
-    html, body { margin: 0; padding: 0; }
-    img { display: block; width: ${size.widthMm}mm; height: ${size.heightMm}mm; break-after: page; }
-    img:last-child { break-after: auto; }
-  </style></head><body>${urls.map((u) => `<img src="${u}" alt="">`).join('')}</body></html>`;
+    html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+    body > :not(#print-pages) { display: none !important; }
+    #print-pages { display: block !important; }
+    #print-pages img { display: block; width: ${size.widthMm}mm; height: ${size.heightMm}mm; break-after: page; }
+    #print-pages img:last-child { break-after: auto; }
+  }`;
+  const container = document.createElement('div');
+  container.id = 'print-pages';
+  container.hidden = true;
+  const images = urls.map((url) => Object.assign(document.createElement('img'), { src: url, alt: '' }));
+  container.append(...images);
+  document.head.append(style);
+  document.body.append(container);
+  await Promise.all(images.map((img) => img.decode().catch(() => undefined)));
 
   const cleanUp = () => {
-    frame.remove();
+    style.remove();
+    container.remove();
     for (const u of urls) URL.revokeObjectURL(u);
   };
-
-  await new Promise<void>((resolve) => {
-    frame.addEventListener('load', () => resolve(), { once: true });
-    document.body.append(frame);
-  });
-  const win = frame.contentWindow!;
-  await Promise.all(
-    [...win.document.images].map((img) => (img.complete ? Promise.resolve() : img.decode().catch(() => undefined))),
-  );
-  win.addEventListener('afterprint', () => setTimeout(cleanUp, 0), { once: true });
-  win.focus();
-  win.print();
-  // Some browsers never fire afterprint for a frame; don't leak it for ever.
-  setTimeout(cleanUp, 60_000);
+  // print() blocks until the dialog closes on desktop, but returns at once on Android,
+  // where the page must stay printable until the system print UI has rendered it.
+  // afterprint fires in both cases once it is done with the page.
+  window.addEventListener('afterprint', () => setTimeout(cleanUp, 0), { once: true });
+  window.print();
 }

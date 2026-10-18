@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#0b6e69" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <title>Label Printer</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='7' y='3' width='18' height='26' rx='2' fill='%23fff' stroke='%23111' stroke-width='2'/%3E%3Cpath d='M11 9h10M11 13h6' stroke='%23111' stroke-width='2'/%3E%3Cpath d='M11 18v6M13 18v6M16 18v6M18 18v6M21 18v6' stroke='%23111' stroke-width='1.5'/%3E%3C/svg%3E" />
   </head>
@@ -18,7 +21,7 @@
         <label class="drop" id="drop">
           <input type="file" id="files" accept="application/pdf,.pdf,image/*" multiple hidden />
           <strong>Drop label PDFs here</strong>
-          <span>or click to choose files. Images and pasted screenshots work too.</span>
+          <span>or click to choose files. Images and pasted screenshots work too. Installed on Android, share label PDFs straight to this app.</span>
         </label>
 
         <details class="panel">
@@ -30,7 +33,7 @@
           </form>
         </details>
 
-        <details class="panel" open>
+        <details class="panel" id="settings-panel" open>
           <summary>Label settings</summary>
           <form id="settings" class="stack">
             <label>Print on <select name="output"></select></label>
@@ -57,6 +60,7 @@
           <div class="queue-actions">
             <button type="button" id="clear" class="quiet" disabled>Clear</button>
             <button type="button" id="download" disabled>Download PDF</button>
+            <button type="button" id="share" hidden disabled>Share</button>
             <button type="button" id="print" class="primary" disabled>Print</button>
           </div>
         </div>
