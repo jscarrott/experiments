@@ -71,7 +71,8 @@ whichever app you opened it with (Files, Chrome, Drive). It is not on the Play S
 
 ### Building it
 
-Needs JDK 21 and the Android SDK (platform 35).
+Needs JDK 21 and the Android SDK (platform 36). The app targets Android 16 (API 36), which
+Google Play requires of new apps and updates, and runs on Android 7.0 and later.
 
 ```bash
 npm run android:apk   # -> android/app/build/outputs/apk/release/app-release.apk
