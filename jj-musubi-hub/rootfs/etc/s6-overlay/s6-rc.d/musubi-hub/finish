@@ -1,0 +1,7 @@
+#!/usr/bin/env bashio
+# shellcheck shell=bash
+if [ "$1" -ne 0 ] && [ "$1" -ne 256 ]; then
+    bashio::log.warning "musubi hub exited with ${1}"
+    echo "$1" > /run/s6-linux-init-container-results/exitcode
+    exec /run/s6/basedir/bin/halt
+fi

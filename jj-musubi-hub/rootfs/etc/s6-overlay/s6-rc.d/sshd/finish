@@ -1,0 +1,9 @@
+#!/usr/bin/env bashio
+# shellcheck shell=bash
+# sshd is how every machine reaches the hub: if it stops, stop the add-on so the supervisor
+# can show it, rather than leave a hub nobody can reach.
+if [ "$1" -ne 0 ] && [ "$1" -ne 256 ]; then
+    bashio::log.warning "sshd exited with ${1}"
+    echo "$1" > /run/s6-linux-init-container-results/exitcode
+    exec /run/s6/basedir/bin/halt
+fi

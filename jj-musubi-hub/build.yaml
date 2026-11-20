@@ -1,0 +1,7 @@
+build_from:
+  amd64: ghcr.io/home-assistant/amd64-base:3.22
+  aarch64: ghcr.io/home-assistant/aarch64-base:3.22
+args:
+  MUSUBI_VERSION: 0.47.1
+  MUSUBI_SHA256_AMD64: 787dc51e2b7fb9cbda04f70f44cb4d612959a6dc7deef8404de65fc05ba81a89
+  MUSUBI_SHA256_AARCH64: 638fec68d00642b3755f70a678ba069efb84380d9448913594c5ab87c12e4d66

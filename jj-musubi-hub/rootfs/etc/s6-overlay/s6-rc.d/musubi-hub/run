@@ -1,0 +1,12 @@
+#!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
+# Serves ~/musubi-hub (/data/musubi/musubi-hub) on its local socket, which `musubi hub
+# connect`, run by sshd for each machine, relays to.
+args=(hub)
+if [ -f /run/musubi/advertise ]; then
+    args+=(--advertise "$(cat /run/musubi/advertise)")
+fi
+bashio::log.info "Starting musubi $(musubi --version 2>/dev/null | awk '{print $2}') hub"
+cd /data/musubi
+exec s6-setuidgid musubi env HOME=/data/musubi USER=musubi LOGNAME=musubi \
+    musubi --color never --log "$(bashio::config 'log_level')" "${args[@]}"

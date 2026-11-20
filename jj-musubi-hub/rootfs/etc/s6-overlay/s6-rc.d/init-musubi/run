@@ -1,0 +1,44 @@
+#!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
+# Prepares /data: the musubi user's home, sshd's host keys, and the keys from the options.
+set -e
+
+home=/data/musubi
+mkdir -p "${home}/.ssh" /data/ssh /run/musubi
+chown musubi:musubi "${home}" "${home}/.ssh"
+chmod 700 "${home}" "${home}/.ssh"
+touch "${home}/.ssh/authorized_keys"
+chown musubi:musubi "${home}/.ssh/authorized_keys"
+chmod 600 "${home}/.ssh/authorized_keys"
+
+# Host keys made once and kept, so machines don't see the hub's key change on every update.
+if [ ! -f /data/ssh/ssh_host_ed25519_key ]; then
+    bashio::log.info "Generating ssh host keys"
+    ssh-keygen -q -t ed25519 -N '' -f /data/ssh/ssh_host_ed25519_key
+    ssh-keygen -q -t rsa -b 4096 -N '' -f /data/ssh/ssh_host_rsa_key
+fi
+chmod 600 /data/ssh/ssh_host_*_key
+
+# Keys from the options: your own, so `musubi create`/`join` can log in once and enroll the
+# machine's own restricted key.
+keys=/run/musubi/authorized_keys
+: > "${keys}"
+if bashio::config.has_value 'authorized_keys'; then
+    bashio::config 'authorized_keys' | while IFS= read -r line || [ -n "${line}" ]; do
+        [ -n "${line}" ] && printf '%s\n' "${line}" >> "${keys}"
+    done
+fi
+chmod 644 "${keys}"
+count=$(grep -c . "${keys}" || true)
+enrolled=$(grep -c 'command="musubi hub connect"' "${home}/.ssh/authorized_keys" || true)
+bashio::log.info "${count} key(s) from the options, ${enrolled} machine key(s) enrolled by musubi"
+if [ "${count}" -eq 0 ] && [ "${enrolled}" -eq 0 ]; then
+    bashio::log.warning "No ssh keys: add your public key to authorized_keys so machines can join"
+fi
+
+# The hub's settings, remembered in hub.toml, take the name machines should ssh to.
+if bashio::config.has_value 'advertise'; then
+    printf '%s\n' "$(bashio::config 'advertise')" > /run/musubi/advertise
+else
+    rm -f /run/musubi/advertise
+fi

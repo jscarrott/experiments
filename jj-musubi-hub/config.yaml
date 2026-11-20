@@ -1,0 +1,24 @@
+name: jj-musubi hub
+version: "0.47.1"
+slug: jj_musubi_hub
+description: A jj-musubi hub, so your machines can keep their Jujutsu repositories in sync through Home Assistant
+url: https://github.com/jscarrott/experiments/tree/main/jj-musubi-hub
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: services
+boot: auto
+ports:
+  22/tcp: 2222
+ports_description:
+  22/tcp: ssh, which musubi on your machines uses to reach the hub
+options:
+  authorized_keys: []
+  advertise: ""
+  log_level: info
+schema:
+  authorized_keys:
+    - str
+  advertise: str?
+  log_level: list(trace|debug|info|warn|error)

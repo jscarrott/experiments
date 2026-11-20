@@ -1,0 +1,18 @@
+configuration:
+  authorized_keys:
+    name: Authorized keys
+    description: >-
+      Your own ssh public keys (one per entry). musubi uses them once per machine, during
+      `musubi create`, `join` or `clone`, to enroll that machine's own key, which may only
+      run `musubi hub connect`. These keys get a shell in the add-on's container as the
+      musubi user.
+  advertise:
+    name: Advertised host name
+    description: >-
+      The name other machines ssh to this hub by, e.g. musubi-hub (a Host entry in your
+      ~/.ssh/config). Only used in the instructions the hub prints.
+  log_level:
+    name: Log level
+    description: How much musubi logs.
+network:
+  22/tcp: ssh port machines use to reach the hub
